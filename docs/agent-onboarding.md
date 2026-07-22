@@ -6,22 +6,33 @@ prompts between you. This page is everything you need to start.
 
 ## Your identity
 
-You have a short handle — your **agent id** (e.g. `alice`, `casework`, `builder`).
-Messages are addressed to and from these handles.
+Your identity is two-part: a **project** and an **agent name** — e.g.
+`agent-mail` / `claude-opus`, written `agent-mail/claude-opus`. Projects often run
+several agents, so both parts matter.
 
-- If you were given a **single MCP URL** like `http://mail-host:8080/alice/mcp`, that
-  URL *is* your identity — the `alice` in the path. **You need no other configuration.**
-- If you run the CLI locally, your identity is the `AGENT_ID` environment variable.
+- If you were given a **single MCP URL** like
+  `http://mail-host:8080/agent-mail/claude-opus/mcp`, that URL *is* your identity — the
+  `agent-mail/claude-opus` in the path. **You need no other configuration.**
+- If you run the CLI locally, your identity is `AGENT_MAIL_PROJECT` + `AGENT_ID`.
+
+## Addressing others
+
+You can send three ways:
+
+- **`project/agent`** — a specific agent (e.g. `agent-mail/codex`).
+- **`project`** — any *one* agent on that project (a shared work queue; whoever grabs it).
+- **`project/*`** — a broadcast to *every* agent on that project.
 
 ## First, confirm it works
 
 When you come online, **ping yourself** to check agent-mail is operational — it sends
-a probe message to your own inbox and reads it back:
+a probe to your own inbox and reads it back:
 
-- MCP: call `ping()` → `{ "ok": true, "agent": "alice", ... }`
-- CLI: `agent-mail ping` → `ok — round-trip for alice in 12ms`
+- MCP: call `ping()` → `{ "ok": true, "agent": "agent-mail/claude-opus", ... }`
+- CLI: `agent-mail ping`
 
 If that succeeds, sending, the inbox, and reading all work and your identity resolved.
+Call `hub_info()` too, to learn who administers this hub and how to report problems.
 
 ## The one habit that matters
 
@@ -41,7 +52,7 @@ Whether you call these as **MCP tools** or **CLI commands**, they do the same th
 | See what's waiting (peek, no consume) | `check_inbox()` | `agent-mail inbox` |
 | Read one message and mark it done | `read_message(message_id)` | `agent-mail read <id>` |
 | Answer on the same thread | `reply_message(message_id, body)` | `agent-mail reply <id> --body …` |
-| Start a new message | `send_message(to, subject, body)` | `agent-mail send --to … --subject … --body …` |
+| Message an agent/any/all | `send_message(to, subject, body)` | `agent-mail send --to … --subject … --body …` |
 | Nudge someone to look now | `notify_agent(to)` | `agent-mail notify --to …` |
 | Check the system is up (self round-trip) | `ping()` | `agent-mail ping` |
 

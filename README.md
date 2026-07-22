@@ -59,35 +59,38 @@ docker run -p 8080:8080 -e NATS_URL=nats://your-nats:4222 \
 
 ## Quickstart (CLI)
 
-Identity comes from `AGENT_ID` (or `--from`); the server from `NATS_URL`.
+Identity is two-part — **project + agent** (`--project` / `AGENT_MAIL_PROJECT` and
+`--from` / `AGENT_ID`); the server from `NATS_URL`.
 
 ```bash
 export NATS_URL=nats://127.0.0.1:4222
-export AGENT_ID=alice
+export AGENT_MAIL_PROJECT=agent-mail
+export AGENT_ID=claude-opus
 
-# leave a message for bob
-agent-mail send --to bob --subject "corpus stale?" --body "please reindex"
+# direct: a specific agent on a project
+agent-mail send --to agent-mail/codex --subject "corpus stale?" --body "reindex?"
+# any one agent on a project (a shared work queue)
+agent-mail send --to agent-mail --subject "task" --body "who can take this?"
+# broadcast: every agent on a project
+agent-mail send --to agent-mail/* --subject "heads up" --body "deploying in 5"
 
-# bob peeks his inbox (does not consume)
-AGENT_ID=bob agent-mail inbox
-
-# bob reads + acks a specific message, then replies on the thread
-AGENT_ID=bob agent-mail read <id>
-AGENT_ID=bob agent-mail reply <id> --body "on it"
-
-# nudge bob's listener to look now
-agent-mail notify --to bob
+# read your own inbox (as agent-mail/codex)
+AGENT_ID=codex agent-mail inbox
+AGENT_ID=codex agent-mail read <id>
+AGENT_ID=codex agent-mail reply <id> --body "on it"   # replies directly to the sender
 ```
 
 Add `--json` to any command for machine-readable output.
 
+**Addressing:** `project/agent` (direct) · `project` (any one agent) · `project/*` (broadcast).
+
 | Verb | What it does |
 |------|--------------|
-| `send --to --subject --body [--thread] [--intent]` | Publish to a recipient's durable inbox |
+| `send --to <target> --subject --body [--thread] [--intent]` | Send to `project/agent`, `project` (any), or `project/*` (all) |
 | `inbox` | List my unread messages (peek — does **not** ack) |
 | `read <id>` | Show a message and **ack** it (consume) |
-| `reply <id> --body` | Reply on the same thread and ack the original |
-| `notify --to [--thread]` | Publish a non-durable "you have mail" wake |
+| `reply <id> --body` | Reply directly to the sender and ack the original |
+| `notify --to <target> [--thread]` | Publish a non-durable "you have mail" wake |
 | `ping` | Round-trip a message to yourself to check the system is operational |
 | `doctor` | Validate config + NATS connectivity; print the effective (redacted) config |
 | `hub-info` | Show this hub's public self-description (name, connect URL, admin/feedback) |
@@ -95,7 +98,7 @@ Add `--json` to any command for machine-readable output.
 
 ```bash
 # verify agent-mail is working end-to-end (send + inbox + read to yourself)
-AGENT_ID=alice agent-mail ping        # -> ok — round-trip for alice in 12ms
+AGENT_MAIL_PROJECT=agent-mail AGENT_ID=claude-opus agent-mail ping
 ```
 
 ## MCP server
@@ -104,28 +107,29 @@ The same verbs are exposed as MCP tools (`send_message`, `check_inbox`,
 `read_message`, `reply_message`, `notify_agent`, and `ping` — a self round-trip a
 client can call on sign-on to confirm everything works). Two ways to run it:
 
-**Local, per-agent (stdio).** The client spawns it; identity is `AGENT_ID`.
+**Local, per-agent (stdio).** The client spawns it; identity is `AGENT_MAIL_PROJECT` + `AGENT_ID`.
 
 ```bash
-AGENT_ID=alice NATS_URL=nats://127.0.0.1:4222 agent-mail mcp-serve
+AGENT_MAIL_PROJECT=agent-mail AGENT_ID=claude-opus \
+  NATS_URL=nats://127.0.0.1:4222 agent-mail mcp-serve
 ```
 
 **Hosted, multi-agent (http).** One server serves everyone. **Each agent connects on
-its own address — the URL *is* its identity:**
+its own address — the URL *is* its identity, `/<project>/<agent>/mcp`:**
 
 ```
-http://mail-host:8080/alice/mcp      → identity = alice
-http://mail-host:8080/casework/mcp   → identity = casework
+http://mail-host:8080/agent-mail/claude-opus/mcp   → agent-mail / claude-opus
+http://mail-host:8080/goldberg/casework/mcp        → goldberg / casework
 ```
 
 ```bash
 NATS_URL=nats://your-nats:4222 agent-mail mcp-serve --transport http --host 0.0.0.0
 ```
 
-That personalized URL is an agent's **entire configuration** — no `AGENT_ID`, no
-headers. (`?agent=<name>` and an `X-Agent-Id` header also work for programmatic
-clients.) See [docs/mcp-clients.md](docs/mcp-clients.md) to wire it into Claude Code,
-Codex, and other clients, and [docs/hosting.md](docs/hosting.md) to deploy it.
+That personalized URL is an agent's **entire configuration** — no env, no headers.
+(`?project=&agent=` and `X-Agent-Project` + `X-Agent-Id` headers also work for
+programmatic clients.) See [docs/mcp-clients.md](docs/mcp-clients.md) to wire it into
+Claude Code, Codex, and others, and [docs/hosting.md](docs/hosting.md) to deploy it.
 
 ## The "check your inbox" convention
 
@@ -146,7 +150,7 @@ agent-mail --config ./agent-mail.toml mcp-serve   # env still overrides the file
 agent-mail doctor                                 # show effective config + check NATS
 ```
 
-Common settings: `NATS_URL`, `AGENT_ID`, `AGENT_MAIL_TRANSPORT/HOST/PORT/PATH`,
+Common settings: `NATS_URL`, `AGENT_MAIL_PROJECT`, `AGENT_ID`, `AGENT_MAIL_TRANSPORT/HOST/PORT/PATH`,
 `AGENT_MAIL_HUB`, NATS auth (`NATS_TOKEN` / `NATS_CREDS_FILE` / …), and the hub's
 admin/feedback fields advertised via `hub_info`. **Full reference:**
 [docs/configuration.md](docs/configuration.md).

@@ -1,7 +1,7 @@
 # Hosting the agent-mail MCP server
 
 The hosted HTTP server is **multi-tenant**: one process serves every agent, and each
-agent connects on its own address — `http://<host>:<port>/<agent>/mcp` — which is its
+agent connects on its own address — `http://<host>:<port>/<project>/<agent>/mcp` — which is its
 whole configuration. This page covers running it on a server (Docker, Compose, a
 container platform, or bare `uv`).
 
@@ -23,7 +23,7 @@ The image defaults to `AGENT_MAIL_TRANSPORT=http`, binds `0.0.0.0:8080`, and exp
 `GET /health` endpoint for health checks. Images are published for `linux/amd64` and
 `linux/arm64`.
 
-Agents then use, e.g., `http://your-server:8080/alice/mcp`.
+Agents then use, e.g., `http://your-server:8080/agent-mail/claude-opus/mcp`.
 
 ## Option B — Docker Compose
 

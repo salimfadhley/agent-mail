@@ -52,11 +52,19 @@ agent-mail doctor
 
 Set at most one auth style. Point the `*_file` options at mounted Docker/Portainer secrets.
 
-### Identity
+### Identity (two-part: project + agent)
+
+Addresses are `project/agent`. A bare `project` targets any one agent; `project/*`
+broadcasts to all.
 
 | TOML key / env var | Default | Meaning |
 |---|---|---|
-| `agent_id` / `AGENT_ID` | — | This agent's id — for the CLI and single-agent (stdio) servers. Leave unset for a hosted multi-agent http server, where identity comes from each agent's URL. |
+| `project` / `AGENT_MAIL_PROJECT` | — | This agent's project. |
+| `agent_id` / `AGENT_ID` | — | This agent's name. |
+
+For the CLI and single-agent (stdio) servers set both. Leave unset for a hosted
+multi-agent http server, where identity comes from each agent's URL
+(`/<project>/<agent>/mcp`).
 
 ### MCP server
 
