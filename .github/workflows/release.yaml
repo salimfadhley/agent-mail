@@ -1,0 +1,57 @@
+name: Release
+
+# Publish to PyPI on a v* tag using Trusted Publishing (OIDC) — no stored token.
+#
+# One-time PyPI setup before the first publish:
+#   1. Sign in at https://pypi.org -> "Your projects" -> "Publishing"
+#      (create a "pending publisher" if the project does not exist yet).
+#   2. Add a GitHub trusted publisher:
+#        Owner:         salimfadhley
+#        Repository:    agent-mail
+#        Workflow name: release.yaml
+#        Environment:   pypi
+#   3. Bump nothing (version comes from the tag via hatch-vcs); just push a tag:
+#        git tag v0.1.0 && git push origin v0.1.0
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history + tags for hatch-vcs version
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Build wheel and sdist
+        run: uv build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write  # required for Trusted Publishing (OIDC)
+    steps:
+      - name: Download built distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

@@ -1,0 +1,32 @@
+# Host the agent-mail MCP server with Docker Compose.
+#
+# NATS (with JetStream) is a prerequisite. By default this points at an existing
+# NATS server via NATS_URL. To spin up a throwaway NATS alongside for a quick trial,
+# run:  docker compose --profile with-nats up
+#
+# Agents then configure a single URL:  http://<this-host>:8080/<agent>/mcp
+
+services:
+  agent-mail:
+    image: ghcr.io/salimfadhley/agent-mail:latest
+    # To build locally instead of pulling, comment out `image:` and uncomment:
+    # build: .
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      AGENT_MAIL_TRANSPORT: http
+      AGENT_MAIL_HOST: 0.0.0.0
+      AGENT_MAIL_PORT: "8080"
+      AGENT_MAIL_LOG_LEVEL: ${AGENT_MAIL_LOG_LEVEL:-INFO}
+
+  # Optional: a local NATS with JetStream, only started with `--profile with-nats`.
+  nats:
+    image: nats:latest
+    profiles: ["with-nats"]
+    command: ["-js", "-m", "8222"]
+    restart: unless-stopped
+    ports:
+      - "4222:4222"
+      - "8222:8222"
