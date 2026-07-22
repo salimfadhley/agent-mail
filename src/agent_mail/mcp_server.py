@@ -25,7 +25,7 @@ from urllib.parse import parse_qs
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
-from agent_mail.config import Config, hub_descriptor
+from agent_mail.config import Config, format_address, hub_descriptor
 from agent_mail.identity import (
     reset_current_agent,
     resolve_identity,
@@ -64,11 +64,12 @@ async def send_message(
     thread: str | None = None,
     intent: str = Intent.message.value,
 ) -> dict[str, Any]:
-    """Send a message to another agent's durable inbox. Returns the sent message."""
+    """Send a message. ``to`` is ``project/agent`` (direct), ``project`` (any one
+    agent), or ``project/*`` (broadcast to all). Returns the sent message."""
     config = _config()
-    sender = resolve_identity(config)
+    project, agent = resolve_identity(config)
     message = Message(
-        from_=sender,
+        from_=format_address(project, agent),
         to=to,
         subject=subject,
         body=body,
@@ -84,9 +85,9 @@ async def send_message(
 async def check_inbox() -> list[dict[str, Any]]:
     """List my unread messages without consuming them (peek). Call each turn."""
     config = _config()
-    me = resolve_identity(config)
+    project, agent = resolve_identity(config)
     async with Mailbox(config) as mailbox:
-        messages = await mailbox.peek(me)
+        messages = await mailbox.peek(project, agent)
     return [_dump(m) for m in messages]
 
 
@@ -94,9 +95,9 @@ async def check_inbox() -> list[dict[str, Any]]:
 async def read_message(message_id: str) -> dict[str, Any]:
     """Read one message by id and ack (consume) it."""
     config = _config()
-    me = resolve_identity(config)
+    project, agent = resolve_identity(config)
     async with Mailbox(config) as mailbox:
-        message = await mailbox.read(me, message_id)
+        message = await mailbox.read(project, agent, message_id)
     return _dump(message)
 
 
@@ -104,17 +105,18 @@ async def read_message(message_id: str) -> dict[str, Any]:
 async def reply_message(
     message_id: str, body: str, subject: str | None = None
 ) -> dict[str, Any]:
-    """Reply on the same thread and ack the original. Returns the reply message."""
+    """Reply directly to the sender and ack the original. Returns the reply message."""
     config = _config()
-    me = resolve_identity(config)
+    project, agent = resolve_identity(config)
     async with Mailbox(config) as mailbox:
-        reply = await mailbox.reply(me, message_id, body, subject)
+        reply = await mailbox.reply(project, agent, message_id, body, subject)
     return _dump(reply)
 
 
 @mcp.tool()
 async def notify_agent(to: str, thread: str | None = None) -> dict[str, Any]:
-    """Publish a lightweight 'you have mail' wake signal (non-durable)."""
+    """Wake a target (non-durable). ``to`` is ``project/agent``, ``project``, or
+    ``project/*``."""
     config = _config()
     async with Mailbox(config) as mailbox:
         await mailbox.notify(to, thread)
@@ -129,10 +131,14 @@ async def ping() -> dict[str, Any]:
     send + inbox + read all work. Consumes only its own probe.
     """
     config = _config()
-    me = resolve_identity(config)
+    project, agent = resolve_identity(config)
     async with Mailbox(config) as mailbox:
-        received = await mailbox.ping(me)
-    return {"ok": True, "agent": me, "message_id": received.id}
+        received = await mailbox.ping(project, agent)
+    return {
+        "ok": True,
+        "agent": format_address(project, agent),
+        "message_id": received.id,
+    }
 
 
 @mcp.tool()
@@ -155,9 +161,9 @@ ASGIApp = Callable[[Scope, Receive, Send], Awaitable[None]]
 class AgentIdentityMiddleware:
     """Resolve the calling agent from the request URL and bind it for the handler.
 
-    Rewrites ``/<agent>/mcp`` to the plain mount path before delegating, so the same
-    underlying MCP app serves every agent. Also answers ``GET /health`` and serves the
-    hub descriptor at ``GET /`` (and ``/hub``) directly.
+    Rewrites ``/<project>/<agent>/mcp`` to the plain mount path before delegating, so
+    the same underlying MCP app serves every agent. Also answers ``GET /health`` and
+    serves the hub descriptor at ``GET /`` (and ``/hub``) directly.
     """
 
     def __init__(self, app: ASGIApp, mount_path: str, hub_json: bytes) -> None:
@@ -165,7 +171,8 @@ class AgentIdentityMiddleware:
         self._mount = mount_path.rstrip("/") or "/mcp"
         self._hub_json = hub_json
         self._pattern = re.compile(
-            rf"^/(?P<agent>[^/]+){re.escape(self._mount)}(?P<rest>/.*)?$"
+            rf"^/(?P<project>[^/]+)/(?P<agent>[^/]+){re.escape(self._mount)}"
+            r"(?P<rest>/.*)?$"
         )
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
@@ -179,29 +186,29 @@ class AgentIdentityMiddleware:
         if path in ("/", "/hub"):
             await self._json(send, self._hub_json)
             return
-        agent = self._extract(scope)
-        token = set_current_agent(agent)
+        address = self._extract(scope)
+        token = set_current_agent(address)
         try:
             await self._app(scope, receive, send)
         finally:
             reset_current_agent(token)
 
-    def _extract(self, scope: Scope) -> str | None:
+    def _extract(self, scope: Scope) -> tuple[str, str] | None:
         match = self._pattern.match(scope.get("path", ""))
         if match:
             rest = match.group("rest") or ""
             new_path = self._mount + rest
             scope["path"] = new_path
             scope["raw_path"] = new_path.encode()
-            return match.group("agent")
-        query = scope.get("query_string", b"")
-        if query:
-            values = parse_qs(query.decode())
-            if values.get("agent"):
-                return values["agent"][0]
-        for key, value in scope.get("headers") or []:
-            if key == b"x-agent-id" and value:
-                return value.decode()
+            return match.group("project"), match.group("agent")
+        query = parse_qs(scope.get("query_string", b"").decode())
+        if query.get("project") and query.get("agent"):
+            return query["project"][0], query["agent"][0]
+        headers = {k: v for k, v in (scope.get("headers") or [])}
+        project = headers.get(b"x-agent-project")
+        agent = headers.get(b"x-agent-id")
+        if project and agent:
+            return project.decode(), agent.decode()
         return None
 
     @staticmethod

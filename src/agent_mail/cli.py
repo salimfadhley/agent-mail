@@ -12,7 +12,7 @@ from collections.abc import Awaitable, Callable, Sequence
 
 import click
 
-from agent_mail.config import Config, hub_descriptor
+from agent_mail.config import Config, format_address, hub_descriptor
 from agent_mail.config_env import set_runtime_config_path
 from agent_mail.exceptions import ConfigError, MailboxError
 from agent_mail.mailbox import Mailbox
@@ -68,10 +68,15 @@ def _emit(payload: object, *, as_json: bool, human: Callable[[], None]) -> None:
 
 @click.group()
 @click.option(
+    "--project",
+    default=None,
+    help="Your project (overrides AGENT_MAIL_PROJECT).",
+)
+@click.option(
     "--from",
     "from_",
     default=None,
-    help="Your agent identity (overrides AGENT_ID).",
+    help="Your agent name (overrides AGENT_ID).",
 )
 @click.option(
     "--json",
@@ -89,19 +94,31 @@ def _emit(payload: object, *, as_json: bool, human: Callable[[], None]) -> None:
 )
 @click.pass_context
 def cli(
-    ctx: click.Context, from_: str | None, as_json: bool, config_path: str | None
+    ctx: click.Context,
+    project: str | None,
+    from_: str | None,
+    as_json: bool,
+    config_path: str | None,
 ) -> None:
-    """A NATS JetStream mailbox for local LLM agents."""
+    """A NATS JetStream mailbox for local LLM agents.
+
+    Addresses are two-part: project/agent (direct), project (any one agent), or
+    project/* (broadcast to every agent).
+    """
     ctx.ensure_object(dict)
     set_runtime_config_path(config_path)
-    config = Config.from_env(agent_override=from_)
+    config = Config.from_env(agent_override=from_, project_override=project)
     logging.getLogger("agent_mail").setLevel(config.log_level.upper())
     ctx.obj["config"] = config
     ctx.obj["as_json"] = as_json
 
 
 @cli.command()
-@click.option("--to", required=True, help="Recipient agent id.")
+@click.option(
+    "--to",
+    required=True,
+    help="Target: project/agent (direct), project (any one), or project/* (broadcast).",
+)
 @click.option("--subject", required=True, help="Message subject.")
 @click.option("--body", required=True, help="Message body.")
 @click.option("--thread", default=None, help="Thread id to attach to (optional).")
@@ -120,13 +137,13 @@ def send(
     thread: str | None,
     intent: str,
 ) -> None:
-    """Send a message to another agent."""
+    """Send a message to an agent, any agent on a project, or all of them."""
     config: Config = ctx.obj["config"]
     as_json: bool = ctx.obj["as_json"]
     try:
-        sender = config.require_identity()
+        project, agent = config.require_address()
         message = Message(
-            from_=sender,
+            from_=format_address(project, agent),
             to=to,
             subject=subject,
             body=body,
@@ -151,13 +168,13 @@ def inbox(ctx: click.Context) -> None:
     config: Config = ctx.obj["config"]
     as_json: bool = ctx.obj["as_json"]
     try:
-        me = config.require_identity()
-        messages = _run(_with_mailbox(config, lambda mb: mb.peek(me)))
+        project, agent = config.require_address()
+        messages = _run(_with_mailbox(config, lambda mb: mb.peek(project, agent)))
     except (ConfigError, MailboxError) as exc:
         _fail(str(exc))
         return
 
-    logger.info("inbox for %s: %d unread", config.agent_id, len(messages))
+    logger.info("inbox for %s/%s: %d unread", project, agent, len(messages))
 
     def human() -> None:
         if not messages:
@@ -178,8 +195,10 @@ def read(ctx: click.Context, message_id: str) -> None:
     config: Config = ctx.obj["config"]
     as_json: bool = ctx.obj["as_json"]
     try:
-        me = config.require_identity()
-        message = _run(_with_mailbox(config, lambda mb: mb.read(me, message_id)))
+        project, agent = config.require_address()
+        message = _run(
+            _with_mailbox(config, lambda mb: mb.read(project, agent, message_id))
+        )
     except (ConfigError, MailboxError) as exc:
         _fail(str(exc))
         return
@@ -201,9 +220,11 @@ def reply(ctx: click.Context, message_id: str, body: str, subject: str | None) -
     config: Config = ctx.obj["config"]
     as_json: bool = ctx.obj["as_json"]
     try:
-        me = config.require_identity()
+        project, agent = config.require_address()
         message = _run(
-            _with_mailbox(config, lambda mb: mb.reply(me, message_id, body, subject))
+            _with_mailbox(
+                config, lambda mb: mb.reply(project, agent, message_id, body, subject)
+            )
         )
     except (ConfigError, MailboxError) as exc:
         _fail(str(exc))
@@ -245,9 +266,10 @@ def ping(ctx: click.Context) -> None:
     config: Config = ctx.obj["config"]
     as_json: bool = ctx.obj["as_json"]
     try:
-        me = config.require_identity()
+        project, agent = config.require_address()
+        me = format_address(project, agent)
         start = time.perf_counter()
-        received = _run(_with_mailbox(config, lambda mb: mb.ping(me)))
+        received = _run(_with_mailbox(config, lambda mb: mb.ping(project, agent)))
         roundtrip_ms = round((time.perf_counter() - start) * 1000, 1)
     except (ConfigError, MailboxError) as exc:
         logger.warning("ping failed: %s", exc)

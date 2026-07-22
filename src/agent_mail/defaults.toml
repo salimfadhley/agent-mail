@@ -19,10 +19,12 @@ nats_url = "nats://127.0.0.1:4222"
 # nats_creds_file = "/run/secrets/nats.creds"   # env NATS_CREDS_FILE (NATS .creds)
 # nats_ca_file = "/run/secrets/nats-ca.pem"     # env NATS_CA_FILE (TLS CA cert)
 
-# --- Identity -------------------------------------------------------------
-# Your agent id, for the CLI and single-agent (stdio) servers. Leave unset for a
-# hosted multi-agent http server (identity comes from each agent's URL instead).
-# agent_id = "alice"                   # env AGENT_ID
+# --- Identity (two-part: project + agent) ---------------------------------
+# Addresses are <project>/<agent>. For the CLI and single-agent (stdio) servers,
+# set both. Leave unset for a hosted multi-agent http server (identity comes from
+# each agent's URL /<project>/<agent>/mcp instead).
+# project = "agent-mail"               # env AGENT_MAIL_PROJECT
+# agent_id = "claude-opus"             # env AGENT_ID  (the agent name)
 
 # --- MCP server (agent-mail mcp-serve) ------------------------------------
 transport = "stdio"                    # env AGENT_MAIL_TRANSPORT  (stdio | http)

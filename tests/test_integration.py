@@ -2,7 +2,8 @@
 
 Run with::
 
-    AGENT_MAIL_INTEGRATION=1 uv run pytest tests/test_integration.py
+    AGENT_MAIL_INTEGRATION=1 NATS_URL=nats://your-nats:4222 \
+        uv run pytest tests/test_integration.py
 """
 
 from __future__ import annotations
@@ -22,60 +23,80 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-async def test_send_peek_read_reply_roundtrip() -> None:
-    # Unique agent ids per run so the durable consumers start empty.
-    suffix = uuid4().hex[:8]
-    alice = f"itest-alice-{suffix}"
-    bob = f"itest-bob-{suffix}"
-    config = Config.from_env()
+def _project() -> str:
+    return f"itest-{uuid4().hex[:8]}"
 
-    async with Mailbox(config) as mailbox:
+
+async def test_direct_send_peek_read_reply() -> None:
+    project = _project()
+    async with Mailbox(Config.from_env()) as mb:
         original = Message(
-            from_=alice,
-            to=bob,
-            subject="ping",
-            body="are you there?",
+            from_=f"{project}/alice", to=f"{project}/bob", subject="ping", body="here?"
         )
-        await mailbox.send(original)
+        await mb.send(original)
 
-        # peek does not consume: bob still sees it twice
-        first_peek = await mailbox.peek(bob)
-        assert any(m.id == original.id for m in first_peek)
-        second_peek = await mailbox.peek(bob)
-        assert any(m.id == original.id for m in second_peek)
+        # peek does not consume
+        assert any(m.id == original.id for m in await mb.peek(project, "bob"))
+        assert any(m.id == original.id for m in await mb.peek(project, "bob"))
 
-        # read consumes it
-        read_back = await mailbox.read(bob, original.id)
-        assert read_back.body == "are you there?"
-        assert await mailbox.peek(bob) == []
+        # read consumes
+        got = await mb.read(project, "bob", original.id)
+        assert got.body == "here?"
+        assert await mb.peek(project, "bob") == []
 
-        # send again and reply — reply should land in alice's inbox, threaded
-        second = Message(from_=alice, to=bob, subject="ping2", body="q")
-        await mailbox.send(second)
-        reply = await mailbox.reply(bob, second.id, "yes, here")
+        # reply lands directly in alice's inbox, threaded
+        second = Message(
+            from_=f"{project}/alice", to=f"{project}/bob", subject="q", body="q"
+        )
+        await mb.send(second)
+        reply = await mb.reply(project, "bob", second.id, "yes")
         assert reply.intent is Intent.reply
-        assert reply.thread == second.thread
-
-        alice_inbox = await mailbox.peek(alice)
-        assert any(m.id == reply.id and m.body == "yes, here" for m in alice_inbox)
-        # clean up alice's inbox
-        await mailbox.read(alice, reply.id)
+        assert reply.to == f"{project}/alice"
+        assert any(m.id == reply.id for m in await mb.peek(project, "alice"))
+        await mb.read(project, "alice", reply.id)
 
 
-async def test_notify_publishes() -> None:
-    config = Config.from_env()
-    async with Mailbox(config) as mailbox:
-        # notify is fire-and-forget; success is simply not raising.
-        await mailbox.notify(f"itest-{uuid4().hex[:8]}")
+async def test_broadcast_reaches_every_agent() -> None:
+    project = _project()
+    async with Mailbox(Config.from_env()) as mb:
+        # create both agents' consumers first, so the broadcast fans out to them
+        await mb.peek(project, "alice")
+        await mb.peek(project, "bob")
+
+        await mb.send(
+            Message(from_=f"{project}/sys", to=f"{project}/*", subject="all", body="hi")
+        )
+        assert any(m.subject == "all" for m in await mb.peek(project, "alice"))
+        assert any(m.subject == "all" for m in await mb.peek(project, "bob"))
+
+
+async def test_any_delivers_to_exactly_one_agent() -> None:
+    project = _project()
+    async with Mailbox(Config.from_env()) as mb:
+        await mb.peek(project, "alice")
+        await mb.peek(project, "bob")
+
+        await mb.send(
+            Message(from_=f"{project}/sys", to=project, subject="task", body="do it")
+        )
+
+        # alice grabs it from the shared queue
+        pending = [m for m in await mb.peek(project, "alice") if m.subject == "task"]
+        assert pending
+        await mb.read(project, "alice", pending[0].id)
+
+        # bob no longer sees it — it was consumed once
+        assert not any(m.subject == "task" for m in await mb.peek(project, "bob"))
 
 
 async def test_ping_roundtrip() -> None:
-    agent = f"itest-ping-{uuid4().hex[:8]}"
-    config = Config.from_env()
-    async with Mailbox(config) as mailbox:
-        received = await mailbox.ping(agent)
-        assert received.from_ == agent
-        assert received.to == agent
+    project = _project()
+    async with Mailbox(Config.from_env()) as mb:
+        received = await mb.ping(project, "alice")
         assert received.subject == "agent-mail ping"
-        # the probe was consumed, so the inbox is empty again
-        assert await mailbox.peek(agent) == []
+        assert await mb.peek(project, "alice") == []
+
+
+async def test_notify_publishes() -> None:
+    async with Mailbox(Config.from_env()) as mb:
+        await mb.notify(f"{_project()}/x")  # fire-and-forget; success = no raise

@@ -1,4 +1,4 @@
-"""Runtime configuration for agent-mail.
+"""Runtime configuration and addressing for agent-mail.
 
 Every setting has one canonical name, usable identically as a lowercase TOML key or
 as an environment variable (e.g. TOML ``nats_url`` == env ``NATS_URL``). Values are
@@ -6,8 +6,8 @@ resolved from four layers, later ones winning:
 
     field defaults  <  baked defaults.toml  <  runtime --config file  <  environment
 
-The runtime file is named by ``AGENT_MAIL_CONFIG`` (the ``--config`` flag sets it).
-Environment variables always win, which is the least-surprising choice for containers.
+Addresses are two-part — ``<project>/<agent>``. A bare ``<project>`` targets any one
+agent on that project; ``<project>/*`` broadcasts to every agent.
 """
 
 from __future__ import annotations
@@ -34,40 +34,94 @@ STREAM_NAME = "AGENT_MAIL"
 MAIL_SUBJECT_PREFIX = "agent.mail"
 NOTIFY_SUBJECT_PREFIX = "agent.notify"
 
-_BAKED_DEFAULTS = Path(__file__).parent / "defaults.toml"
-_VALID_AGENT_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
+# Reserved subject tokens for the two group-delivery modes. They start with "_", so
+# they can never be a valid agent id or project — no collision with real names.
+RESERVED_ALL = "__all__"  # broadcast: a copy to every agent on the project
+RESERVED_ANY = "__any__"  # anycast: exactly one agent on the project (a work queue)
 
-# Fields that must never be echoed in logs, banners, or discovery responses.
+_BAKED_DEFAULTS = Path(__file__).parent / "defaults.toml"
+_VALID_TOKEN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
+
 _SECRET_FIELDS = frozenset({"nats_token", "nats_password"})
 
 
-def validate_agent_id(agent_id: str) -> str:
-    """Return ``agent_id`` unchanged if it is a safe NATS subject token, else raise.
-
-    Agent ids become part of a NATS subject and a JetStream durable name, so they
-    must not contain dots, spaces or wildcards.
-    """
-    if not _VALID_AGENT_ID.match(agent_id):
+def _validate_token(value: str, kind: str) -> str:
+    if not _VALID_TOKEN.match(value):
         raise ConfigError(
-            f"invalid agent id {agent_id!r}: use letters, digits, '-' or '_' "
-            "(no dots, spaces or wildcards), max 64 chars"
+            f"invalid {kind} {value!r}: use letters, digits, '-' or '_' "
+            "(must start alphanumeric; no dots, spaces or wildcards), max 64 chars"
         )
-    return agent_id
+    return value
 
 
-def mail_subject(recipient: str) -> str:
-    """Return the durable mailbox subject for ``recipient``."""
-    return f"{MAIL_SUBJECT_PREFIX}.{validate_agent_id(recipient)}"
+def validate_agent_id(agent_id: str) -> str:
+    """Return ``agent_id`` if it is a safe NATS subject token, else raise."""
+    return _validate_token(agent_id, "agent id")
 
 
-def notify_subject(recipient: str) -> str:
-    """Return the ephemeral wake-signal subject for ``recipient``."""
-    return f"{NOTIFY_SUBJECT_PREFIX}.{validate_agent_id(recipient)}"
+def validate_project(project: str) -> str:
+    """Return ``project`` if it is a safe NATS subject token, else raise."""
+    return _validate_token(project, "project")
 
 
-def durable_name(agent_id: str) -> str:
-    """Return the per-agent JetStream durable consumer name."""
-    return f"mail-{validate_agent_id(agent_id)}"
+def format_address(project: str, agent: str) -> str:
+    """Return the canonical ``<project>/<agent>`` address string."""
+    return f"{validate_project(project)}/{validate_agent_id(agent)}"
+
+
+def direct_subject(project: str, agent: str) -> str:
+    """Subject for one specific agent's inbox."""
+    return (
+        f"{MAIL_SUBJECT_PREFIX}.{validate_project(project)}.{validate_agent_id(agent)}"
+    )
+
+
+def broadcast_subject(project: str) -> str:
+    """Subject every agent on ``project`` also listens to (fan-out)."""
+    return f"{MAIL_SUBJECT_PREFIX}.{validate_project(project)}.{RESERVED_ALL}"
+
+
+def any_subject(project: str) -> str:
+    """Shared queue subject for ``project`` (exactly one agent consumes)."""
+    return f"{MAIL_SUBJECT_PREFIX}.{validate_project(project)}.{RESERVED_ANY}"
+
+
+def own_durable(project: str, agent: str) -> str:
+    """Per-agent durable consumer name (direct + broadcast)."""
+    return f"mail-{validate_project(project)}-{validate_agent_id(agent)}"
+
+
+def any_durable(project: str) -> str:
+    """Shared per-project durable consumer name (anycast queue)."""
+    return f"mail-{validate_project(project)}-{RESERVED_ANY}"
+
+
+def parse_target(to: str) -> tuple[str, str]:
+    """Resolve an address string to ``(kind, subject)``.
+
+    ``project/agent`` -> direct; ``project`` -> any (one agent);
+    ``project/*`` -> broadcast (every agent).
+    """
+    to = to.strip()
+    if "/" not in to:
+        return "any", any_subject(to)
+    project, name = to.split("/", 1)
+    if name == "*":
+        return "broadcast", broadcast_subject(project)
+    return "direct", direct_subject(project, name)
+
+
+def notify_target_subject(to: str) -> str:
+    """Resolve an address string to its non-durable wake-signal subject."""
+    to = to.strip()
+    if "/" not in to:
+        return f"{NOTIFY_SUBJECT_PREFIX}.{validate_project(to)}.{RESERVED_ALL}"
+    project, name = to.split("/", 1)
+    if name == "*":
+        return f"{NOTIFY_SUBJECT_PREFIX}.{validate_project(project)}.{RESERVED_ALL}"
+    return (
+        f"{NOTIFY_SUBJECT_PREFIX}.{validate_project(project)}.{validate_agent_id(name)}"
+    )
 
 
 def _alias(toml_key: str, env_name: str) -> AliasChoices:
@@ -83,7 +137,6 @@ class Config(BaseSettings):
 
     # case_sensitive is essential: the lowercase TOML aliases (e.g. ``path``, ``host``)
     # must NOT match ubiquitous uppercase env vars (``PATH``, ``HOST``, ``USER``, …).
-    # Env vars use the documented UPPERCASE alias; TOML keys use the lowercase one.
     model_config = SettingsConfigDict(frozen=True, extra="ignore", case_sensitive=True)
 
     # -- NATS connection --------------------------------------------------
@@ -106,7 +159,10 @@ class Config(BaseSettings):
         None, validation_alias=_alias("nats_ca_file", "NATS_CA_FILE")
     )
 
-    # -- identity ---------------------------------------------------------
+    # -- identity (two-part: project + agent) -----------------------------
+    project: str | None = Field(
+        None, validation_alias=_alias("project", "AGENT_MAIL_PROJECT")
+    )
     agent_id: str | None = Field(None, validation_alias=_alias("agent_id", "AGENT_ID"))
 
     # -- MCP server -------------------------------------------------------
@@ -167,18 +223,35 @@ class Config(BaseSettings):
         return tuple(sources)
 
     @classmethod
-    def from_env(cls, agent_override: str | None = None) -> Config:
-        """Build config from all layers, letting ``agent_override`` win on identity."""
+    def from_env(
+        cls, agent_override: str | None = None, project_override: str | None = None
+    ) -> Config:
+        """Build config from all layers, letting the overrides win on identity."""
         config = cls()
+        updates: dict[str, str] = {}
+        if project_override:
+            updates["project"] = project_override
         if agent_override:
-            config = config.model_copy(update={"agent_id": agent_override})
+            updates["agent_id"] = agent_override
+        if updates:
+            config = config.model_copy(update=updates)
         return config
 
-    def require_identity(self) -> str:
-        """Return the validated agent id, or raise if none was configured."""
+    def require_address(self) -> tuple[str, str]:
+        """Return the validated ``(project, agent)``, or raise if either is missing."""
+        if not self.project:
+            raise ConfigError(
+                "no project: set AGENT_MAIL_PROJECT or pass --project <project>"
+            )
         if not self.agent_id:
-            raise ConfigError("no agent identity: set AGENT_ID or pass --from <agent>")
-        return validate_agent_id(self.agent_id)
+            raise ConfigError("no agent name: set AGENT_ID or pass --from <agent>")
+        return validate_project(self.project), validate_agent_id(self.agent_id)
+
+    def address(self) -> str | None:
+        """Return the ``<project>/<agent>`` string, or None if not fully set."""
+        if self.project and self.agent_id:
+            return format_address(self.project, self.agent_id)
+        return None
 
     def base_url(self) -> str:
         """Return the advertised base URL agents should connect to."""
@@ -197,18 +270,22 @@ class Config(BaseSettings):
 
 
 def hub_descriptor(config: Config) -> dict[str, object]:
-    """Return the hub's public, non-secret self-description for discovery.
-
-    Served by ``GET /`` and the ``hub_info`` MCP tool so an agent can learn, on
-    sign-on, which hub it reached, how to connect, and how to get help.
-    """
+    """Return the hub's public, non-secret self-description for discovery."""
     base = config.base_url()
+    connect = (
+        f"{base}/<project>/<agent>{config.path}"
+        if config.transport == "http"
+        else f"{base}{config.path.rstrip('/')}"
+    )
     return {
         "hub": config.hub,
         "description": config.hub_description,
-        "connect_url_template": f"{base}{config.path.rstrip('/')}"
-        if config.transport != "http"
-        else f"{base}/<agent>{config.path}",
+        "addressing": {
+            "direct": "project/agent",
+            "any": "project (bare) — one agent on the project",
+            "broadcast": "project/* — every agent on the project",
+        },
+        "connect_url_template": connect,
         "transport": config.transport,
         "admin_agent": config.admin_agent,
         "issue_url": config.issue_url,
