@@ -80,6 +80,20 @@ def test_config_layering_env_beats_file_beats_default(
     assert Config().hub == "from-env"
 
 
+def test_lowercase_aliases_do_not_capture_uppercase_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # PATH/HOST/USER are always in the environment; they must not leak into the
+    # matching lowercase-aliased fields (regression for case-insensitive matching).
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    monkeypatch.setenv("HOST", "somehost")
+    monkeypatch.delenv("AGENT_MAIL_PATH", raising=False)
+    monkeypatch.delenv("AGENT_MAIL_HOST", raising=False)
+    config = Config()
+    assert config.path == "/mcp"
+    assert config.host == "127.0.0.1"
+
+
 def test_missing_config_file_raises() -> None:
     set_runtime_config_path("/definitely/not/here.toml")
     with pytest.raises(ConfigError):

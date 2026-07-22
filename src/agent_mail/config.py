@@ -81,7 +81,10 @@ class Config(BaseSettings):
     Frozen: to vary a field build a copy with :meth:`~pydantic.BaseModel.model_copy`.
     """
 
-    model_config = SettingsConfigDict(frozen=True, extra="ignore")
+    # case_sensitive is essential: the lowercase TOML aliases (e.g. ``path``, ``host``)
+    # must NOT match ubiquitous uppercase env vars (``PATH``, ``HOST``, ``USER``, …).
+    # Env vars use the documented UPPERCASE alias; TOML keys use the lowercase one.
+    model_config = SettingsConfigDict(frozen=True, extra="ignore", case_sensitive=True)
 
     # -- NATS connection --------------------------------------------------
     nats_url: str = Field(
