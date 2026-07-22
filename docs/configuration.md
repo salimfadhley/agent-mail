@@ -94,11 +94,12 @@ Advertised (non-secret) to agents via the `hub_info` MCP tool and `GET /`.
 
 ## Planned settings
 
-These are on the roadmap and will appear here when the behaviour lands, so they are
-not accepted yet (to avoid dead config):
+On the [roadmap](missions/); not accepted yet (to avoid dead config):
 
-- **Elasticsearch audit log** — `es_url`, `es_api_key`, `es_index`, `es_ca_file`,
-  `audit_bodies`. An optional NATS→ES subscriber that indexes an audit trail; if unset,
-  agent-mail runs exactly as today.
+- **[SQLite backend](missions/0002-sqlite-backend.md)** — `backend` (`nats` | `sqlite`)
+  and `db` (file path). A zero-infrastructure single-box mode that needs no NATS server.
+- **[Elasticsearch audit log](missions/0001-elasticsearch-audit-log.md)** — `es_url`,
+  `es_api_key`, `es_index`, `es_ca_file`, `audit_bodies`. An optional NATS→ES subscriber;
+  if unset, agent-mail runs exactly as today.
 - **Retention** — how long unread mail persists (JetStream max age / size / count).
 - **Max message size** — the Claim-Check threshold for large payloads.

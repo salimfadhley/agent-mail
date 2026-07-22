@@ -168,6 +168,15 @@ AGENT_MAIL_INTEGRATION=1 NATS_URL=nats://your-nats:4222 uv run pytest tests/test
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the coding standards and quality gates.
 
+## Roadmap
+
+Planned missions (see [docs/missions](docs/missions/)):
+
+- **[Elasticsearch audit log](docs/missions/0001-elasticsearch-audit-log.md)** — an
+  optional NATS→ES subscriber for searchable history and dashboards.
+- **[SQLite backend](docs/missions/0002-sqlite-backend.md)** — a zero-infrastructure
+  single-box mode so you can run agent-mail with no NATS server at all.
+
 ## License
 
 [GPL-3.0-or-later](LICENSE).
