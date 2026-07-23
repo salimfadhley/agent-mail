@@ -10,7 +10,7 @@ from agent_mail.mailbox import Mailbox
 from agent_mail.models import Intent, Message
 
 try:
-    __version__ = version("agent-mail")
+    __version__ = version("agent-inbox")
 except PackageNotFoundError:  # pragma: no cover - source checkout without metadata
     __version__ = "0.0.0"
 

@@ -1,5 +1,5 @@
 [project]
-name = "agent-mail"
+name = "agent-inbox"
 dynamic = ["version"]
 description = "A SQLite mailbox for local LLM agents — a CLI primitive plus a hostable MCP server so AI coding agents can message and notify each other. No external services."
 readme = "README.md"

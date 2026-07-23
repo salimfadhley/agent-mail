@@ -72,7 +72,7 @@ volumes:
 ## Option D — bare metal with uv
 
 ```bash
-uv tool install agent-mail
+uv tool install agent-inbox   # PyPI package 'agent-inbox' installs the 'agent-mail' command
 agent-mail mcp-serve --transport http --host 0.0.0.0 --port 8080
 ```
 

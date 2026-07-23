@@ -243,7 +243,7 @@ class Config(BaseSettings):
 
 def _hub_version() -> str:
     try:
-        return _pkg_version("agent-mail")
+        return _pkg_version("agent-inbox")
     except PackageNotFoundError:  # pragma: no cover - source checkout w/o metadata
         return "0.0.0"
 

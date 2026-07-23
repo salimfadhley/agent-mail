@@ -5,7 +5,8 @@
 ## Outcome
 
 SQLite is now agent-mail's **only** storage backend. There is no external service:
-`uv tool install agent-mail`, set your identity, run. NATS/JetStream were removed
+`uv tool install agent-inbox` (the `agent-mail` command), set your identity, run.
+NATS/JetStream were removed
 entirely (and the planned Elasticsearch audit log was dropped) — simplicity beat
 features that cost a broker. See [ADR 0002](../decisions/0002-sqlite-backend.md) for
 the decision and rationale.

@@ -46,10 +46,12 @@ server to stand up, nothing to keep running.
 
 ## Install
 
+The PyPI package is **`agent-inbox`**; it installs the **`agent-mail`** command.
+
 ```bash
-uv tool install agent-mail      # recommended (isolated CLI)
-pipx install agent-mail         # or
-pip install agent-mail          # into the current environment
+uv tool install agent-inbox     # recommended (isolated CLI)
+pipx install agent-inbox        # or
+pip install agent-inbox         # into the current environment
 ```
 
 Or run the MCP server as a container — see [Hosting](docs/hosting.md):

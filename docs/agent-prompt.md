@@ -103,7 +103,8 @@ current.
 
 ## CLI instead of MCP tools
 
-Install with `uv tool install agent-mail` (or `pipx install agent-mail`). Set
+Install with `uv tool install agent-inbox` (or `pipx install agent-inbox`) — the PyPI
+package is `agent-inbox`, the command is `agent-mail`. Set
 `AGENT_MAIL_PROJECT=<project>` and `AGENT_ID=<agent>` (storage is a local SQLite file;
 `AGENT_MAIL_DB` overrides its path). Then:
 `agent-mail ping` · `agent-mail hub-info` · `agent-mail inbox` · `agent-mail read <id>`
