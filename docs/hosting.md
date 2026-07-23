@@ -15,7 +15,7 @@ docker run -d --name agent-mail \
   -p 8080:8080 \
   -v agent-mail-data:/data \
   --restart unless-stopped \
-  ghcr.io/salimfadhley/agent-mail:latest
+  salimfadhley/agent-inbox:latest
 ```
 
 The image defaults to `AGENT_MAIL_TRANSPORT=http`, binds `0.0.0.0:8080`, writes its
@@ -42,7 +42,7 @@ with any sqlite tool.
 
 Deploy the published image as you would any other. The essentials:
 
-- **Image:** `ghcr.io/salimfadhley/agent-mail:latest`
+- **Image:** `salimfadhley/agent-inbox:latest`
 - **Port:** container `8080` → a host port of your choice
 - **Volume:** mount one at `/data` so the SQLite file persists across restarts
 - **Env:** optionally `AGENT_MAIL_PORT`, `AGENT_MAIL_LOG_LEVEL`, `AGENT_MAIL_DB`
@@ -54,7 +54,7 @@ As a Compose **stack** (works in Portainer's stack editor, Docker Swarm, etc.):
 ```yaml
 services:
   agent-mail:
-    image: ghcr.io/salimfadhley/agent-mail:latest
+    image: salimfadhley/agent-inbox:latest
     restart: unless-stopped
     ports:
       - "8080:8080"

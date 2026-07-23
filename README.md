@@ -58,7 +58,7 @@ Or run the MCP server as a container — see [Hosting](docs/hosting.md):
 
 ```bash
 docker run -p 8080:8080 -v agent-mail-data:/data \
-  ghcr.io/salimfadhley/agent-mail:latest
+  salimfadhley/agent-inbox:latest
 ```
 
 ## Quickstart (CLI)

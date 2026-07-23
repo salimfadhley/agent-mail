@@ -4,7 +4,7 @@ name: Docker image
 # runs on Intel/AMD servers, Apple Silicon, and 64-bit Raspberry Pi) and push it.
 # On every push to main -> :latest (+ :main-<sha>). On a v* tag -> :<version>.
 #
-# It always publishes to GHCR (ghcr.io/<owner>/agent-mail, no setup needed) and ALSO
+# It always publishes to GHCR (ghcr.io/<owner>/agent-inbox, no setup needed) and ALSO
 # to Docker Hub as soon as these repo secrets exist (Settings -> Secrets and variables
 # -> Actions); until then the Docker Hub push is skipped, not failed:
 #   DOCKERHUB_USERNAME  your Docker Hub account/namespace
@@ -48,9 +48,9 @@ jobs:
         id: reg
         # GHCR always; Docker Hub only when its secrets are configured.
         run: |
-          imgs="ghcr.io/${{ github.repository }}"
+          imgs="ghcr.io/${{ github.repository_owner }}/agent-inbox"
           if [ "${HAS_DOCKERHUB}" = "true" ]; then
-            imgs=$(printf 'docker.io/%s/agent-mail\n%s' "${{ secrets.DOCKERHUB_USERNAME }}" "$imgs")
+            imgs=$(printf 'docker.io/%s/agent-inbox\n%s' "${{ secrets.DOCKERHUB_USERNAME }}" "$imgs")
           fi
           { echo 'images<<EOF'; printf '%s\n' "$imgs"; echo 'EOF'; } >> "$GITHUB_OUTPUT"
 

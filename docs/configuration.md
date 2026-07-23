@@ -21,7 +21,7 @@ docker run -p 8080:8080 \
   -v agent-mail-data:/data \
   -e AGENT_MAIL_HUB=homelab \
   -e AGENT_MAIL_ADMIN_AGENT=admin \
-  ghcr.io/salimfadhley/agent-mail:latest
+  salimfadhley/agent-inbox:latest
 ```
 
 **Developer / uv (file-first):** copy `defaults.toml`, edit, and point at it:

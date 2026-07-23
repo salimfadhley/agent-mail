@@ -12,7 +12,7 @@
 
 services:
   agent-mail:
-    image: ghcr.io/salimfadhley/agent-mail:latest
+    image: salimfadhley/agent-inbox:latest
     # To build locally instead of pulling, comment out `image:` and uncomment:
     # build: .
     restart: unless-stopped
