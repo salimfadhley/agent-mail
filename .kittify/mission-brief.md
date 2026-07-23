@@ -23,7 +23,7 @@ hubs) converged on one shape:
 
 > **durable store + a thin "you have mail" signal + a per-agent listener.**
 
-We already run **NATS with JetStream** (`nats://192.168.86.31:4222`), which provides
+We already run **NATS with JetStream** (`nats://<broker-host>:4222`), which provides
 exactly the missing pieces: durable subjects (the mailbox), publish (the wake
 signal), and request-reply (synchronous "answer me now"). So `agent-mail` wraps NATS
 in agent-friendly tooling and a standing "check your inbox" convention, so humans no
@@ -39,7 +39,7 @@ Build (a) fully; treat a live wake-daemon as a stretch goal.
 1. **A JetStream-backed mailbox model.** A stream `AGENT_MAIL` over subject
    `agent.mail.<recipient>`, with a **durable consumer per agent** so messages
    persist until that agent acks them. Config via env: `NATS_URL`
-   (default `nats://192.168.86.31:4222`), agent identity via `AGENT_ID`.
+   (default `nats://<broker-host>:4222`), agent identity via `AGENT_ID`.
    - Message schema (pydantic): `{ id, from, to, thread, intent, subject, body, created }`
      where `intent ∈ {message, reply, ack, actioned}`.
 
