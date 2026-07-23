@@ -1,6 +1,6 @@
-# Contributing to agent-mail
+# Contributing to agent-inbox
 
-Thanks for helping. `agent-mail` is small, generic infrastructure — contributions
+Thanks for helping. `agent-inbox` is small, generic infrastructure — contributions
 should keep it that way.
 
 ## Setup
@@ -31,8 +31,8 @@ services to stand up and nothing gated behind an environment flag.
 
 Follow [`docs/coding-standards.md`](docs/coding-standards.md) and the project rules in
 [`AGENTS.md`](AGENTS.md). In short: full type annotations, absolute imports, specific
-exceptions from `agent_mail.exceptions`, logging over `print`, config through
-`agent_mail.config.Config`, and ruff-clean + pyright-clean.
+exceptions from `agent_inbox.exceptions`, logging over `print`, config through
+`agent_inbox.config.Config`, and ruff-clean + pyright-clean.
 
 Keep it **generic** — no deployment-specific hostnames, IPs, secrets, or org names in
 code, docs, or tests.

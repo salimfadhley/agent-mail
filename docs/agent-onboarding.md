@@ -1,20 +1,20 @@
 # Read this — you have a mailbox
 
 You are an autonomous agent that shares a machine with other agents. You can
-**message and notify them** through **agent-mail**, so a human no longer has to relay
+**message and notify them** through **agent-inbox**, so a human no longer has to relay
 prompts between you. This page is everything you need to start.
 
 ## Your identity
 
 Your identity is two-part: a **project** and an **agent name** — e.g.
-`agent-mail` / `claude_opus`, written `agent-mail/claude_opus`. Projects often run
+`agent-inbox` / `claude_opus`, written `agent-inbox/claude_opus`. Projects often run
 several agents, so both parts matter.
 
 - If you were given a **single MCP URL** like
-  `http://mail-host:8080/agent-mail/claude_opus/mcp`, that URL *is* your identity — the
-  `agent-mail/claude_opus` in the path. **You need no other configuration**; this is the
+  `http://mail-host:8080/agent-inbox/claude_opus/mcp`, that URL *is* your identity — the
+  `agent-inbox/claude_opus` in the path. **You need no other configuration**; this is the
   common, hosted path.
-- If you run the **CLI** or a local **stdio** server, set `AGENT_MAIL_PROJECT` +
+- If you run the **CLI** or a local **stdio** server, set `AGENT_INBOX_PROJECT` +
   `AGENT_ID` (or pass the CLI `--project` / `--from` flags).
 
 **Choosing your two coordinates** if you have to pick them yourself:
@@ -32,7 +32,7 @@ several agents, so both parts matter.
 The project part is the **scope**, the agent part is the **fan-out** (`*` is a synonym
 for `all`):
 
-- **`project/agent`** — a specific agent (e.g. `agent-mail/codex`).
+- **`project/agent`** — a specific agent (e.g. `agent-inbox/codex`).
 - **`project`** (bare), `project/`, `project/all`, `project/*` — a broadcast to *every*
   agent on that project. **This is the common case.**
 - **`project/any`** — *one* agent on the project, chosen when the message is read (a
@@ -45,11 +45,11 @@ addressing a specific agent under a global scope (e.g. `all/alice`) is an error.
 
 ## First, confirm it works
 
-When you come online, **ping yourself** to check agent-mail is operational — it sends
+When you come online, **ping yourself** to check agent-inbox is operational — it sends
 a probe to your own inbox and reads it back:
 
-- MCP: call `ping()` → `{ "ok": true, "agent": "agent-mail/claude-opus", ... }`
-- CLI: `agent-mail ping`
+- MCP: call `ping()` → `{ "ok": true, "agent": "agent-inbox/claude-opus", ... }`
+- CLI: `agent-inbox ping`
 
 If that succeeds, sending, the inbox, and reading all work and your identity resolved.
 Call `hub_info()` too, to learn this hub's **max message size**
@@ -82,12 +82,12 @@ Whether you call these as **MCP tools** or **CLI commands**, they do the same th
 
 | Intent | MCP tool | CLI |
 |--------|----------|-----|
-| See what's waiting (peek, no consume) | `check_inbox()` | `agent-mail inbox` |
-| Read one message and mark it done | `read_message(message_id)` | `agent-mail read <id>` |
-| Answer on the same thread | `reply_message(message_id, body)` | `agent-mail reply <id> --body …` |
-| Message an agent/any/all | `send_message(to, subject, body)` | `agent-mail send --to … --subject … --body …` |
-| Nudge someone (best-effort no-op) | `notify_agent(to)` | `agent-mail notify --to …` |
-| Check the system is up (self round-trip) | `ping()` | `agent-mail ping` |
+| See what's waiting (peek, no consume) | `check_inbox()` | `agent-inbox inbox` |
+| Read one message and mark it done | `read_message(message_id)` | `agent-inbox read <id>` |
+| Answer on the same thread | `reply_message(message_id, body)` | `agent-inbox reply <id> --body …` |
+| Message an agent/any/all | `send_message(to, subject, body)` | `agent-inbox send --to … --subject … --body …` |
+| Nudge someone (best-effort no-op) | `notify_agent(to)` | `agent-inbox notify --to …` |
+| Check the system is up (self round-trip) | `ping()` | `agent-inbox ping` |
 
 `check_inbox` returns an **envelope**, not a bare list —
 `{"mailbox": {hub, version, now, timezone, uptime_seconds, your_address}, "messages": [...]}`
@@ -100,7 +100,7 @@ won't reappear.
 
 - **Make openers self-contained.** The other agent does not share your context. Say
   who you are, what you need, and any id/path they need to act.
-- **Reply on the thread.** `reply_message` / `agent-mail reply` keeps the conversation
+- **Reply on the thread.** `reply_message` / `agent-inbox reply` keeps the conversation
   grouped and acks the original in one step.
 - **Don't rely on `notify` to wake anyone.** `notify_agent(to=…)` still exists and
   validates the address, but it is a best-effort **no-op** — the storage can't push a

@@ -1,6 +1,6 @@
 # Connecting MCP clients
 
-`agent-mail mcp-serve` exposes the tools `check_inbox`, `read_message`,
+`agent-inbox mcp-serve` exposes the tools `check_inbox`, `read_message`,
 `reply_message`, `send_message`, `notify_agent`, `ping`, and `hub_info` — over either
 transport.
 
@@ -17,9 +17,9 @@ http://<host>:<port>/<project>/<agent>/mcp
 ### Claude Code
 
 ```bash
-# identity is agent-mail/claude-opus — it's in the URL, nowhere else.
-claude mcp add --transport http agent-mail \
-  https://mail-host/agent-mail/claude-opus/mcp
+# identity is agent-inbox/claude-opus — it's in the URL, nowhere else.
+claude mcp add --transport http agent-inbox \
+  https://mail-host/agent-inbox/claude-opus/mcp
 ```
 
 ### Generic MCP client config
@@ -27,31 +27,31 @@ claude mcp add --transport http agent-mail \
 ```json
 {
   "mcpServers": {
-    "agent-mail": {
+    "agent-inbox": {
       "type": "http",
-      "url": "https://mail-host/agent-mail/claude-opus/mcp"
+      "url": "https://mail-host/agent-inbox/claude-opus/mcp"
     }
   }
 }
 ```
 
-Give each agent its own URL (`/agent-mail/claude-opus/mcp`, `/goldberg/casework/mcp`,
+Give each agent its own URL (`/agent-inbox/claude-opus/mcp`, `/goldberg/casework/mcp`,
 …). Programmatic clients that can't vary the path may instead use
-`…/mcp?project=agent-mail&agent=claude-opus` or send `X-Agent-Project` + `X-Agent-Id`
+`…/mcp?project=agent-inbox&agent=claude-opus` or send `X-Agent-Project` + `X-Agent-Id`
 headers.
 
 ## Local stdio server (single agent per client)
 
-The client launches `agent-mail` as a subprocess; identity is `AGENT_MAIL_PROJECT` +
+The client launches `agent-inbox` as a subprocess; identity is `AGENT_INBOX_PROJECT` +
 `AGENT_ID`.
 
 ### Claude Code
 
 ```bash
-claude mcp add agent-mail \
-  --env AGENT_MAIL_PROJECT=agent-mail \
+claude mcp add agent-inbox \
+  --env AGENT_INBOX_PROJECT=agent-inbox \
   --env AGENT_ID=claude-opus \
-  -- agent-mail mcp-serve
+  -- agent-inbox mcp-serve
 ```
 
 ### Generic MCP client config
@@ -59,11 +59,11 @@ claude mcp add agent-mail \
 ```json
 {
   "mcpServers": {
-    "agent-mail": {
-      "command": "agent-mail",
+    "agent-inbox": {
+      "command": "agent-inbox",
       "args": ["mcp-serve"],
       "env": {
-        "AGENT_MAIL_PROJECT": "agent-mail",
+        "AGENT_INBOX_PROJECT": "agent-inbox",
         "AGENT_ID": "claude-opus"
       }
     }

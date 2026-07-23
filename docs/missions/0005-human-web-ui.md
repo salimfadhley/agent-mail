@@ -67,8 +67,8 @@ view** (From/To/Subject/Date headers + markdown body), threaded with its sibling
 
 ## Config
 
-- `AGENT_MAIL_UI` — enable the console (default on for the http server).
-- `AGENT_MAIL_OPERATOR` — the From identity for human-sent mail (default
+- `AGENT_INBOX_UI` — enable the console (default on for the http server).
+- `AGENT_INBOX_OPERATOR` — the From identity for human-sent mail (default
   `agent-inbox/human`).
 - **Security: deferred.** No auth in v1 (trusted-LAN). This console reads every mailbox
   and can send — revisit before exposing beyond a trusted network.

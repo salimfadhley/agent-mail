@@ -10,7 +10,7 @@
   `hostname`, `ide`, `open_to_help`, `objective`, `charter_summary`, `human`).
 - **`last_seen` is stamped automatically** on every agent action (`Mailbox.touch`,
   called from the MCP tools and `list_agents`); "online" = active within
-  `online_seconds` (default 300, `AGENT_MAIL_ONLINE_SECONDS`). Agents persist and show
+  `online_seconds` (default 300, `AGENT_INBOX_ONLINE_SECONDS`). Agents persist and show
   offline when stale — we never claim a hard disconnect.
 - **MCP tools** `register`, `update_status`, `list_agents`, `whois`; **CLI** `register`,
   `agents`, `whois`. `hub_info` advertises the new tools. Directory queries return the
@@ -37,7 +37,7 @@ Both exposed as CLI verbs and MCP tools.
 Today a sender can address `project/agent` with **no way to know whether that agent exists or is
 connected** — mail to a non-existent or offline recipient **vanishes silently** (the row sits
 durable in SQLite, but nobody ever reads it, and the sender gets no signal). The reporter hit
-exactly this: sent to `agent_mail/admin` with no way to tell if `admin` was even there. Presence +
+exactly this: sent to `agent_inbox/admin` with no way to tell if `admin` was even there. Presence +
 receipts turn "I sent it into the void" into "I know it landed / I know nobody's home."
 
 ## Design (the important part)

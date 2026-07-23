@@ -1,4 +1,4 @@
-# agent-mail
+# agent-inbox
 
 **A local SQLite-backed mailbox for local LLM agents.** AI coding agents (Claude,
 Codex, Gemini, …) running on the same machine or LAN get a simple, standard way to
@@ -15,7 +15,7 @@ local SQLite file: **no external services, no message broker.**
 ## Why
 
 Agents on one box usually coordinate by dropping files in a shared git repo — durable
-and auditable, but **poll-only**: one agent can't get another's attention. `agent-mail`
+and auditable, but **poll-only**: one agent can't get another's attention. `agent-inbox`
 gives each agent a real, durable inbox backed by a single local **SQLite** file — no
 server to stand up, nothing to keep running.
 
@@ -34,19 +34,19 @@ server to stand up, nothing to keep running.
 - `notify` is a **best-effort no-op**: SQLite can't wake another process, so the verb
   still exists (and validates the address) but doesn't push anything. The model is
   "check your inbox every turn."
-- The CLI and the MCP server share one core (`agent_mail.mailbox.Mailbox`) — no logic
+- The CLI and the MCP server share one core (`agent_inbox.mailbox.Mailbox`) — no logic
   duplication.
 
 ## Requirements
 
 - **Python 3.12+**
-- **Nothing else.** Storage is a single local SQLite file (`AGENT_MAIL_DB`, default
-  `~/.local/share/agent-mail/agent-mail.db`); there is no broker or other service to
+- **Nothing else.** Storage is a single local SQLite file (`AGENT_INBOX_DB`, default
+  `~/.local/share/agent-inbox/agent-inbox.db`); there is no broker or other service to
   run.
 
 ## Install
 
-The PyPI package is **`agent-inbox`**; it installs the **`agent-mail`** command.
+The PyPI package is **`agent-inbox`**; it installs the **`agent-inbox`** command.
 
 ```bash
 uv tool install agent-inbox     # recommended (isolated CLI)
@@ -57,31 +57,31 @@ pip install agent-inbox         # into the current environment
 Or run the MCP server as a container — see [Hosting](docs/hosting.md):
 
 ```bash
-docker run -p 8080:8080 -v agent-mail-data:/data \
+docker run -p 8080:8080 -v agent-inbox-data:/data \
   salimfadhley/agent-inbox:latest
 ```
 
 ## Quickstart (CLI)
 
 Zero infrastructure: install the package, tell it your two-part identity — **project +
-agent** — and run. One way is env vars (`AGENT_MAIL_PROJECT` + `AGENT_ID`); you can
+agent** — and run. One way is env vars (`AGENT_INBOX_PROJECT` + `AGENT_ID`); you can
 also pass `--project` / `--from` per command. The SQLite file is created on first use.
 
 ```bash
-export AGENT_MAIL_PROJECT=agent-mail   # one way to set identity (or pass --project / --from)
+export AGENT_INBOX_PROJECT=agent-inbox   # one way to set identity (or pass --project / --from)
 export AGENT_ID=claude-opus
 
 # direct: a specific agent on a project
-agent-mail send --to agent-mail/codex --subject "corpus stale?" --body "reindex?"
+agent-inbox send --to agent-inbox/codex --subject "corpus stale?" --body "reindex?"
 # broadcast: every agent on the project (bare project == project/all == project/*)
-agent-mail send --to agent-mail --subject "heads up" --body "deploying in 5"
+agent-inbox send --to agent-inbox --subject "heads up" --body "deploying in 5"
 # work queue: one agent on the project, chosen when the message is read
-agent-mail send --to agent-mail/any --subject "task" --body "who can take this?"
+agent-inbox send --to agent-inbox/any --subject "task" --body "who can take this?"
 
-# read your own inbox (as agent-mail/codex)
-AGENT_ID=codex agent-mail inbox
-AGENT_ID=codex agent-mail read <id>
-AGENT_ID=codex agent-mail reply <id> --body "on it"   # replies directly to the sender
+# read your own inbox (as agent-inbox/codex)
+AGENT_ID=codex agent-inbox inbox
+AGENT_ID=codex agent-inbox read <id>
+AGENT_ID=codex agent-inbox reply <id> --body "on it"   # replies directly to the sender
 ```
 
 Add `--json` to any command for machine-readable output.
@@ -104,8 +104,8 @@ Add `--json` to any command for machine-readable output.
 | `mcp-serve` | Run the MCP server (see below) |
 
 ```bash
-# verify agent-mail is working end-to-end (send + inbox + read to yourself)
-AGENT_MAIL_PROJECT=agent-mail AGENT_ID=claude-opus agent-mail ping
+# verify agent-inbox is working end-to-end (send + inbox + read to yourself)
+AGENT_INBOX_PROJECT=agent-inbox AGENT_ID=claude-opus agent-inbox ping
 ```
 
 ## MCP server
@@ -114,22 +114,22 @@ The same verbs are exposed as MCP tools (`send_message`, `check_inbox`,
 `read_message`, `reply_message`, `notify_agent`, and `ping` — a self round-trip a
 client can call on sign-on to confirm everything works). Two ways to run it:
 
-**Local, per-agent (stdio).** The client spawns it; identity is `AGENT_MAIL_PROJECT` + `AGENT_ID`.
+**Local, per-agent (stdio).** The client spawns it; identity is `AGENT_INBOX_PROJECT` + `AGENT_ID`.
 
 ```bash
-AGENT_MAIL_PROJECT=agent-mail AGENT_ID=claude-opus agent-mail mcp-serve
+AGENT_INBOX_PROJECT=agent-inbox AGENT_ID=claude-opus agent-inbox mcp-serve
 ```
 
 **Hosted, multi-agent (http).** One server serves everyone. **Each agent connects on
 its own address — the URL *is* its identity, `/<project>/<agent>/mcp`:**
 
 ```
-http://mail-host:8080/agent-mail/claude-opus/mcp   → agent-mail / claude-opus
+http://mail-host:8080/agent-inbox/claude-opus/mcp   → agent-inbox / claude-opus
 http://mail-host:8080/goldberg/casework/mcp        → goldberg / casework
 ```
 
 ```bash
-agent-mail mcp-serve --transport http --host 0.0.0.0
+agent-inbox mcp-serve --transport http --host 0.0.0.0
 ```
 
 That personalized URL is an agent's **entire configuration** — no env, no headers.
@@ -149,17 +149,17 @@ An agent only benefits from mail if it looks. Paste the ready-made block from
 Settings resolve from four layers, **later winning**: field defaults → the baked
 `defaults.toml` → a runtime `--config file.toml` → **environment variables**. Every
 setting has one name usable as a lowercase TOML key or its UPPERCASE env var (`db`
-== `AGENT_MAIL_DB`). Containers set env vars; developers point at a TOML file:
+== `AGENT_INBOX_DB`). Containers set env vars; developers point at a TOML file:
 
 ```bash
-agent-mail --config ./agent-mail.toml mcp-serve   # env still overrides the file
-agent-mail doctor                                 # show effective config + check storage
+agent-inbox --config ./agent-inbox.toml mcp-serve   # env still overrides the file
+agent-inbox doctor                                 # show effective config + check storage
 ```
 
-Common settings: `AGENT_MAIL_DB` (the SQLite file path), `AGENT_MAIL_TTL_DAYS`
-(auto-purge age, default 14; 0 disables), `AGENT_MAIL_MAX_MESSAGE_BYTES` (default
-1048576 = 1 MiB), `AGENT_MAIL_PROJECT`, `AGENT_ID`,
-`AGENT_MAIL_TRANSPORT/HOST/PORT/PATH`, `AGENT_MAIL_HUB_NAME`, `MCP_SERVER_NAME` (the
+Common settings: `AGENT_INBOX_DB` (the SQLite file path), `AGENT_INBOX_TTL_DAYS`
+(auto-purge age, default 14; 0 disables), `AGENT_INBOX_MAX_MESSAGE_BYTES` (default
+1048576 = 1 MiB), `AGENT_INBOX_PROJECT`, `AGENT_ID`,
+`AGENT_INBOX_TRANSPORT/HOST/PORT/PATH`, `AGENT_INBOX_HUB_NAME`, `MCP_SERVER_NAME` (the
 MCP server name clients see), and the hub's admin/feedback fields advertised via
 `hub_info`. **Full reference:**
 [docs/configuration.md](docs/configuration.md).

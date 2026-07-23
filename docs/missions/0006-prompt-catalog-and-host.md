@@ -7,7 +7,7 @@
 - **In-process prompt catalog:** `GET /prompts/` (markdown index), `GET /prompts/<name>`
   (live-rendered), `GET /prompts/<unknown>` → 404. Served by the existing path-dispatch
   middleware (alongside `/`, `/health`, `/hub`) — no restructure of the MCP mount.
-- **Templates** in `src/agent_mail/prompts/*.md` with `title`/`description` frontmatter,
+- **Templates** in `src/agent_inbox/prompts/*.md` with `title`/`description` frontmatter,
   auto-discovered (drop one in → it appears), rendered with live coords via
   `string.Template` (`$hub_url`, `$host_agent`, …). Path-traversal blocked. Packaged in
   the wheel. `hub_info` advertises `prompts_url`.
@@ -82,14 +82,14 @@ agent's normal messaging and file tools.
 
 ## Design
 
-- Prompt templates in the repo (e.g. `src/agent_mail/prompts/*.md`), rendered with
+- Prompt templates in the repo (e.g. `src/agent_inbox/prompts/*.md`), rendered with
   config values at request time. A small `prompts` module + catalog registry.
 - HTTP routes added to the server: a parent app hosts `/prompts/*` (and later the 0005
   UI) and mounts the MCP app at `/<project>/<agent>/mcp` unchanged.
 
 ## Config
 
-- `AGENT_MAIL_HOST_AGENT` (already shipped in 0004) — the coordinator's address,
+- `AGENT_INBOX_HOST_AGENT` (already shipped in 0004) — the coordinator's address,
   advertised in `hub_info`; `/prompts/onboarding` tells newcomers to introduce to it.
 
 ## Definition of done

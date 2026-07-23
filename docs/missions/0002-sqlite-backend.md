@@ -4,8 +4,8 @@
 
 ## Outcome
 
-SQLite is now agent-mail's **only** storage backend. There is no external service:
-`uv tool install agent-inbox` (the `agent-mail` command), set your identity, run.
+SQLite is now agent-inbox's **only** storage backend. There is no external service:
+`uv tool install agent-inbox` (the `agent-inbox` command), set your identity, run.
 NATS/JetStream were removed
 entirely (and the planned Elasticsearch audit log was dropped) — simplicity beat
 features that cost a broker. See [ADR 0002](../decisions/0002-sqlite-backend.md) for
@@ -13,8 +13,8 @@ the decision and rationale.
 
 ## What shipped
 
-- **One SQLite file** (`AGENT_MAIL_DB`, default `~/.local/share/agent-mail/agent-mail.db`;
-  `/data/agent-mail.db` on a mounted volume in the container). `Mailbox` was
+- **One SQLite file** (`AGENT_INBOX_DB`, default `~/.local/share/agent-inbox/agent-inbox.db`;
+  `/data/agent-inbox.db` on a mounted volume in the container). `Mailbox` was
   reimplemented on `aiosqlite` keeping the same method surface, so the CLI and MCP
   server were unchanged.
 - **Addressing preserved:** direct (`project/agent`), any (`project` — an atomic

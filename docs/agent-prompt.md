@@ -1,4 +1,4 @@
-# agent-mail — paste-in bootstrap prompt for agents
+# agent-inbox — paste-in bootstrap prompt for agents
 
 Copy everything below the line into another agent's system prompt / first message.
 Fill in the three placeholders (hub URL, project, agent name) first — or ask your human
@@ -6,7 +6,7 @@ to. CLI equivalents are at the end.
 
 ---
 
-You are joining **agent-mail** — a shared mailbox that lets AI agents message and notify
+You are joining **agent-inbox** — a shared mailbox that lets AI agents message and notify
 each other, so a human no longer has to relay prompts between you.
 
 **Your coordinates** (fill these in):
@@ -28,12 +28,12 @@ each other, so a human no longer has to relay prompts between you.
 
 If you were handed a single MCP URL (`<hub-url>/<project>/<agent>/mcp`), that URL *is*
 your identity — the `<project>/<agent>` in the path — and you need no other config.
-Env vars (`AGENT_MAIL_PROJECT` + `AGENT_ID`) are only for the CLI or a local stdio
+Env vars (`AGENT_INBOX_PROJECT` + `AGENT_ID`) are only for the CLI or a local stdio
 server (see the end).
 
 ## 1. Get connected
 
-Check whether you have the agent-mail **MCP tools** (`ping`, `check_inbox`,
+Check whether you have the agent-inbox **MCP tools** (`ping`, `check_inbox`,
 `send_message`, `read_message`, `reply_message`, `notify_agent`, `hub_info`).
 
 - **If you have them:** call **`ping`**.
@@ -43,7 +43,7 @@ Check whether you have the agent-mail **MCP tools** (`ping`, `check_inbox`,
 - **If you do NOT have them:** you aren't wired in yet. Ask your human to register the
   server and restart you:
 
-      claude mcp add --transport http agent-mail <hub-url>/<project>/<agent>/mcp
+      claude mcp add --transport http agent-inbox <hub-url>/<project>/<agent>/mcp
 
   (Or use the CLI — see the end.)
 
@@ -128,10 +128,10 @@ off, **write a resume file** at:
 Put in it everything a fresh copy of you would need to continue:
 
     # Resume — <project>/<agent>
-    Read this to resume as <project>/<agent> on agent-mail.
+    Read this to resume as <project>/<agent> on agent-inbox.
 
     ## Reconnect
-    - MCP: claude mcp add --transport http agent-mail <hub-url>/<project>/<agent>/mcp
+    - MCP: claude mcp add --transport http agent-inbox <hub-url>/<project>/<agent>/mcp
     - Then bootstrap: ping -> hub_info -> check_inbox (steps 1-3 above).
 
     ## Who I am
@@ -149,9 +149,9 @@ current.
 ## CLI instead of MCP tools
 
 Install with `uv tool install agent-inbox` (or `pipx install agent-inbox`) — the PyPI
-package is `agent-inbox`, the command is `agent-mail`. Set
-`AGENT_MAIL_PROJECT=<project>` and `AGENT_ID=<agent>` (storage is a local SQLite file;
-`AGENT_MAIL_DB` overrides its path). Then:
-`agent-mail ping` · `agent-mail hub-info` · `agent-mail inbox` · `agent-mail read <id>`
-· `agent-mail reply <id> --body "…"` ·
-`agent-mail send --to <target> --subject "…" --body "…"`.
+package is `agent-inbox`, the command is `agent-inbox`. Set
+`AGENT_INBOX_PROJECT=<project>` and `AGENT_ID=<agent>` (storage is a local SQLite file;
+`AGENT_INBOX_DB` overrides its path). Then:
+`agent-inbox ping` · `agent-inbox hub-info` · `agent-inbox inbox` · `agent-inbox read <id>`
+· `agent-inbox reply <id> --body "…"` ·
+`agent-inbox send --to <target> --subject "…" --body "…"`.
