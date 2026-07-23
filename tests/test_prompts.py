@@ -40,6 +40,30 @@ def test_host_prompt_mentions_its_identity_and_onboarding_url() -> None:
     assert "http://halob:8080/prompts/onboarding" in body  # $prompts_url
 
 
+def test_every_prompt_tells_the_agent_to_persist_a_pointer() -> None:
+    """A prompt read once is forgotten; each must plant a pointer in the agent's config.
+
+    Every served role prompt has to tell the agent to record, in its own startup config
+    (CLAUDE.md / AGENTS.md), both its address and an instruction to re-read the prompt
+    on start — otherwise the bootstrap is one-shot and drifts.
+    """
+    cfg = _config()
+    for entry in prompts.list_prompts():
+        body = prompts.render_prompt(entry["name"], cfg)
+        assert body is not None, entry["name"]
+        lowered = body.lower()
+        assert "claude.md" in lowered and "agents.md" in lowered, (
+            f"{entry['name']}: must name the config file to update"
+        )
+        assert "on start" in lowered, (
+            f"{entry['name']}: must tell the agent to re-read the prompt on start"
+        )
+        # the pointer it plants must be this prompt's own live URL
+        assert f"http://halob:8080/prompts/{entry['name']}" in body, (
+            f"{entry['name']}: must point back at its own URL"
+        )
+
+
 def test_unknown_prompt_is_none_and_traversal_is_blocked() -> None:
     cfg = _config()
     assert prompts.render_prompt("does-not-exist", cfg) is None
