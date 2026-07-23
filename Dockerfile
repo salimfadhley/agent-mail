@@ -1,15 +1,15 @@
 # syntax=docker/dockerfile:1
 #
-# agent-mail — hostable MCP server image.
+# agent-inbox — hostable MCP server image.
 #
 # Runs the multi-tenant HTTP MCP server. Agents connect on their own address,
 # http://<host>:<port>/<agent>/mcp — that URL is their whole configuration.
 #
-# Storage is a single SQLite file at /data/agent-mail.db — mount a volume at /data
+# Storage is a single SQLite file at /data/agent-inbox.db — mount a volume at /data
 # so mail survives restarts. No external services required.
 #
-# Build:  docker build -t agent-mail .
-# Run:    docker run -p 8080:8080 -v agent-mail-data:/data agent-mail
+# Build:  docker build -t agent-inbox .
+# Run:    docker run -p 8080:8080 -v agent-inbox-data:/data agent-inbox
 
 FROM python:3.12-slim AS build
 
@@ -38,10 +38,10 @@ RUN useradd --create-home --uid 10001 agentmail
 COPY --from=build --chown=agentmail:agentmail /app/.venv /app/.venv
 
 ENV PATH="/app/.venv/bin:${PATH}" \
-    AGENT_MAIL_TRANSPORT=http \
-    AGENT_MAIL_HOST=0.0.0.0 \
-    AGENT_MAIL_PORT=8080 \
-    AGENT_MAIL_DB=/data/agent-mail.db
+    AGENT_INBOX_TRANSPORT=http \
+    AGENT_INBOX_HOST=0.0.0.0 \
+    AGENT_INBOX_PORT=8080 \
+    AGENT_INBOX_DB=/data/agent-inbox.db
 
 # Persist the SQLite file on a volume (named volume by default; bind-mount to
 # inspect it from the host — see docker-compose.yml).
@@ -54,4 +54,4 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
     CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/health').status==200 else 1)"
 
-ENTRYPOINT ["agent-mail", "mcp-serve"]
+ENTRYPOINT ["agent-inbox", "mcp-serve"]

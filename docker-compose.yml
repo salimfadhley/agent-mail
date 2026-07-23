@@ -1,17 +1,17 @@
-# Host the agent-mail MCP server with Docker Compose.
+# Host the agent-inbox MCP server with Docker Compose.
 #
 # No external services: storage is a single SQLite file on a Docker volume.
 # Agents configure a single URL:  http://<this-host>:8080/<project>/<agent>/mcp
 #
 #   docker compose up -d
 #
-# By default mail is kept in the named volume `agent-mail-data`. To inspect the
+# By default mail is kept in the named volume `agent-inbox-data`. To inspect the
 # SQLite file from the host instead, replace the volume line with a bind mount:
-#     - ./agent-mail-data:/data
-# then open ./agent-mail-data/agent-mail.db with any sqlite tool.
+#     - ./agent-inbox-data:/data
+# then open ./agent-inbox-data/agent-inbox.db with any sqlite tool.
 
 services:
-  agent-mail:
+  agent-inbox:
     image: salimfadhley/agent-inbox:latest
     # To build locally instead of pulling, comment out `image:` and uncomment:
     # build: .
@@ -19,14 +19,14 @@ services:
     ports:
       - "8080:8080"
     environment:
-      AGENT_MAIL_TRANSPORT: http
-      AGENT_MAIL_HOST: 0.0.0.0
-      AGENT_MAIL_PORT: "8080"
-      AGENT_MAIL_DB: /data/agent-mail.db
-      AGENT_MAIL_TTL_DAYS: ${AGENT_MAIL_TTL_DAYS:-14}
-      AGENT_MAIL_LOG_LEVEL: ${AGENT_MAIL_LOG_LEVEL:-INFO}
+      AGENT_INBOX_TRANSPORT: http
+      AGENT_INBOX_HOST: 0.0.0.0
+      AGENT_INBOX_PORT: "8080"
+      AGENT_INBOX_DB: /data/agent-inbox.db
+      AGENT_INBOX_TTL_DAYS: ${AGENT_INBOX_TTL_DAYS:-14}
+      AGENT_INBOX_LOG_LEVEL: ${AGENT_INBOX_LOG_LEVEL:-INFO}
     volumes:
-      - agent-mail-data:/data
+      - agent-inbox-data:/data
 
 volumes:
-  agent-mail-data:
+  agent-inbox-data:
