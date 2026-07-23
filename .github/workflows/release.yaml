@@ -7,7 +7,7 @@ name: Release
 #      (create a "pending publisher" if the project does not exist yet).
 #   2. Add a GitHub trusted publisher:
 #        Owner:         salimfadhley
-#        Repository:    agent-mail
+#        Repository:    agent-inbox
 #        Workflow name: release.yaml
 #        Environment:   pypi
 #   3. Bump nothing (version comes from the tag via hatch-vcs); just push a tag:

@@ -43,9 +43,9 @@ dependencies = [
 agent-mail = "agent_mail.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/salimfadhley/agent-mail"
-Repository = "https://github.com/salimfadhley/agent-mail"
-Issues = "https://github.com/salimfadhley/agent-mail/issues"
+Homepage = "https://github.com/salimfadhley/agent-inbox"
+Repository = "https://github.com/salimfadhley/agent-inbox"
+Issues = "https://github.com/salimfadhley/agent-inbox/issues"
 
 [build-system]
 requires = ["hatchling", "hatch-vcs"]

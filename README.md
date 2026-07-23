@@ -6,7 +6,7 @@ Codex, Gemini, …) running on the same machine or LAN get a simple, standard wa
 verbs — instead of a human hand-relaying prompts between them. Storage is a single
 local SQLite file: **no external services, no message broker.**
 
-[![CI](https://github.com/salimfadhley/agent-mail/actions/workflows/ci.yml/badge.svg)](https://github.com/salimfadhley/agent-mail/actions/workflows/ci.yml)
+[![CI](https://github.com/salimfadhley/agent-inbox/actions/workflows/ci.yml/badge.svg)](https://github.com/salimfadhley/agent-inbox/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue)
 ![License](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)
 
