@@ -9,6 +9,7 @@ import os
 import sys
 import time
 from collections.abc import Awaitable, Callable, Sequence
+from typing import NoReturn
 
 import click
 
@@ -25,7 +26,7 @@ def _run[T](coro: Awaitable[T]) -> T:
     return asyncio.run(coro)  # type: ignore[arg-type]
 
 
-def _fail(message: str) -> None:
+def _fail(message: str) -> NoReturn:
     click.echo(f"error: {message}", err=True)
     raise SystemExit(1)
 

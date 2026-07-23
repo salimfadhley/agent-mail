@@ -114,48 +114,58 @@ class Config(BaseSettings):
         default_factory=default_db_path, validation_alias=_alias("db", "AGENT_MAIL_DB")
     )
     ttl_days: int = Field(
-        DEFAULT_TTL_DAYS, validation_alias=_alias("ttl_days", "AGENT_MAIL_TTL_DAYS")
+        default=DEFAULT_TTL_DAYS,
+        validation_alias=_alias("ttl_days", "AGENT_MAIL_TTL_DAYS"),
     )
     max_message_bytes: int = Field(
-        DEFAULT_MAX_MESSAGE_BYTES,
+        default=DEFAULT_MAX_MESSAGE_BYTES,
         validation_alias=_alias("max_message_bytes", "AGENT_MAIL_MAX_MESSAGE_BYTES"),
     )
 
     # -- identity (two-part: project + agent) -----------------------------
     project: str | None = Field(
-        None, validation_alias=_alias("project", "AGENT_MAIL_PROJECT")
+        default=None, validation_alias=_alias("project", "AGENT_MAIL_PROJECT")
     )
-    agent_id: str | None = Field(None, validation_alias=_alias("agent_id", "AGENT_ID"))
+    agent_id: str | None = Field(
+        default=None, validation_alias=_alias("agent_id", "AGENT_ID")
+    )
 
     # -- MCP server -------------------------------------------------------
     transport: str = Field(
-        "stdio", validation_alias=_alias("transport", "AGENT_MAIL_TRANSPORT")
+        default="stdio", validation_alias=_alias("transport", "AGENT_MAIL_TRANSPORT")
     )
-    host: str = Field("127.0.0.1", validation_alias=_alias("host", "AGENT_MAIL_HOST"))
-    port: int = Field(8080, validation_alias=_alias("port", "AGENT_MAIL_PORT"))
-    path: str = Field("/mcp", validation_alias=_alias("path", "AGENT_MAIL_PATH"))
+    host: str = Field(
+        default="127.0.0.1", validation_alias=_alias("host", "AGENT_MAIL_HOST")
+    )
+    port: int = Field(default=8080, validation_alias=_alias("port", "AGENT_MAIL_PORT"))
+    path: str = Field(
+        default="/mcp", validation_alias=_alias("path", "AGENT_MAIL_PATH")
+    )
     public_url: str | None = Field(
-        None, validation_alias=_alias("public_url", "AGENT_MAIL_PUBLIC_URL")
+        default=None, validation_alias=_alias("public_url", "AGENT_MAIL_PUBLIC_URL")
     )
 
     # -- hub identity & administration (advertised via hub_info) ----------
-    hub: str = Field("agent-mail", validation_alias=_alias("hub", "AGENT_MAIL_HUB"))
+    hub: str = Field(
+        default="agent-mail", validation_alias=_alias("hub", "AGENT_MAIL_HUB")
+    )
     hub_description: str | None = Field(
-        None, validation_alias=_alias("hub_description", "AGENT_MAIL_HUB_DESCRIPTION")
+        default=None,
+        validation_alias=_alias("hub_description", "AGENT_MAIL_HUB_DESCRIPTION"),
     )
     admin_agent: str | None = Field(
-        None, validation_alias=_alias("admin_agent", "AGENT_MAIL_ADMIN_AGENT")
+        default=None, validation_alias=_alias("admin_agent", "AGENT_MAIL_ADMIN_AGENT")
     )
     issue_url: str | None = Field(
-        None, validation_alias=_alias("issue_url", "AGENT_MAIL_ISSUE_URL")
+        default=None, validation_alias=_alias("issue_url", "AGENT_MAIL_ISSUE_URL")
     )
     contact: str | None = Field(
-        None, validation_alias=_alias("contact", "AGENT_MAIL_CONTACT")
+        default=None, validation_alias=_alias("contact", "AGENT_MAIL_CONTACT")
     )
 
     # -- ops --------------------------------------------------------------
     log_level: str = Field(
-        "WARNING", validation_alias=_alias("log_level", "AGENT_MAIL_LOG_LEVEL")
+        default="WARNING", validation_alias=_alias("log_level", "AGENT_MAIL_LOG_LEVEL")
     )
 
     @classmethod

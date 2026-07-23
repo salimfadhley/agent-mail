@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
 
 def _new_id() -> str:
@@ -38,7 +38,12 @@ class Message(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     id: str = Field(default_factory=_new_id)
-    from_: str = Field(alias="from")
+    # serialization_alias keeps the wire key "from"; validation_alias accepts either.
+    # Using these (not `alias=`) keeps the init param name `from_` for type checkers.
+    from_: str = Field(
+        validation_alias=AliasChoices("from", "from_"),
+        serialization_alias="from",
+    )
     to: str
     thread: str | None = None
     intent: Intent = Intent.message
