@@ -317,7 +317,6 @@ class WebConsole:
             send,
             "status.html",
             stats=stats,
-            hub_name=self._config.hub_name,
             version=hub_version(),
             base_url=self._config.base_url(),
             db=self._config.db,

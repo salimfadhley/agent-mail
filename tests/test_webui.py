@@ -196,6 +196,20 @@ async def test_operator_inbox_read_consumes(env: tuple[Config, Mailbox]) -> None
     assert await mb.peek("agent-inbox", "human") == []
 
 
+async def test_status_and_doctor_render(env: tuple[Config, Mailbox]) -> None:
+    config, _ = env
+    console = WebConsole(config)
+
+    status = await _asgi(console, "GET", "/ui/status")
+    assert status["status"] == 200
+    assert "Status" in status["body"]
+    assert "agent-inbox/human" in status["body"]  # operator shown
+
+    doctor = await _asgi(console, "GET", "/ui/doctor")
+    assert doctor["status"] == 200
+    assert "Diagnostics" in doctor["body"]
+
+
 async def test_unknown_page_is_404(env: tuple[Config, Mailbox]) -> None:
     config, _ = env
     console = WebConsole(config)
