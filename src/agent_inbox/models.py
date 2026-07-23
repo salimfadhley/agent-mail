@@ -102,6 +102,7 @@ class AgentInfo(BaseModel):
     project: str
     agent: str
     address: str
+    role: str | None = None
     first_seen: datetime
     last_seen: datetime
     online: bool

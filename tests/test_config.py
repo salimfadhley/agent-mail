@@ -14,9 +14,11 @@ from agent_inbox.config import (
     ConfigError,
     format_address,
     hub_descriptor,
+    parse_address,
     parse_target,
     validate_agent_id,
     validate_project,
+    validate_role,
 )
 from agent_inbox.config_env import set_runtime_config_path
 
@@ -183,3 +185,59 @@ def test_hub_descriptor_defaults_limit_to_config() -> None:
     config = Config().model_copy(update={"max_message_bytes": 4096})
     descriptor = hub_descriptor(config)
     assert descriptor["limits"] == {"max_message_bytes": 4096}
+
+
+# -- three-part addressing: <project>[/<agent>[/<role>]] ----------------------
+#
+# Each position narrows independently. `all`, `*` and an EMPTY position all mean
+# "every value"; `any` also matches every value but asks for exactly one recipient.
+
+
+def _t(address: str) -> tuple[str | None, str | None, str | None, bool]:
+    target = parse_address(address)
+    return target.project, target.agent, target.role, target.claim
+
+
+@pytest.mark.parametrize(
+    "forms",
+    [
+        # a bare project is everyone on it — and every spelling agrees
+        ["a", "a/all", "a/all/all", "a/*/all", "a/*/*", "a/*", "a/", "a//"],
+        # naming an agent leaves the role wide open
+        ["a/b", "a/b/all", "a/b/*", "a/b/"],
+        # an empty position is just another spelling of `all`, so a role can be
+        # addressed on its own: //host reaches whoever holds it, anywhere
+        ["//host", "*/*/host", "all/all/host"],
+        ["//admin", "*/*/admin"],
+        # everyone, everywhere
+        ["all", "*", "*/*", "all/all/all", "//"],
+    ],
+)
+def test_equivalent_address_spellings(forms: list[str]) -> None:
+    assert len({_t(f) for f in forms}) == 1, forms
+
+
+def test_positions_narrow_independently() -> None:
+    assert _t("a/b/c") == ("a", "b", "c", False)
+    assert _t("a/all/c") == ("a", None, "c", False)  # whoever holds role c on a
+    assert _t("a/b") == ("a", "b", None, False)
+
+
+def test_any_asks_for_exactly_one_recipient() -> None:
+    assert parse_address("a/any").claim is True
+    assert parse_address("a/any/c").claim is True  # one holder of role c
+    assert parse_address("any").claim is True  # one agent anywhere
+    assert parse_address("a").claim is False  # ...but a bare project is everyone
+    assert parse_address("all").claim is False
+
+
+@pytest.mark.parametrize("token", ["all", "ALL", "any", "Any", "*"])
+def test_reserved_words_cannot_be_real_names(token: str) -> None:
+    for validator in (validate_project, validate_agent_id, validate_role):
+        with pytest.raises(ConfigError):
+            validator(token)
+
+
+def test_too_many_parts_is_rejected() -> None:
+    with pytest.raises(ConfigError):
+        parse_address("a/b/c/d")

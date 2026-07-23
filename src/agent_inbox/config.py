@@ -18,6 +18,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _pkg_version
 from pathlib import Path
@@ -82,9 +83,94 @@ def validate_project(project: str) -> str:
     return _validate_token(project, "project")
 
 
-def format_address(project: str, agent: str) -> str:
-    """Return the canonical ``<project>/<agent>`` address string."""
-    return f"{validate_project(project)}/{validate_agent_id(agent)}"
+def validate_role(role: str) -> str:
+    """Return ``role`` if it is a safe address token, else raise."""
+    return _validate_token(role, "role")
+
+
+def format_address(project: str, agent: str, role: str | None = None) -> str:
+    """Return the canonical ``<project>/<agent>[/<role>]`` address string."""
+    base = f"{validate_project(project)}/{validate_agent_id(agent)}"
+    return f"{base}/{validate_role(role)}" if role else base
+
+
+@dataclass(frozen=True)
+class Target:
+    """A parsed destination address.
+
+    Addresses are ``<project>/<agent>/<role>``, and **each position narrows
+    independently**. A position holding a real token matches only that value; a
+    position holding ``all`` (or ``*``, or simply omitted) matches every value; a
+    position holding ``any`` also matches every value but asks for *one* recipient.
+
+    So ``None`` on a field means "any value matches" — the field is a wildcard — and
+    :attr:`claim` says how many of the matching agents actually receive it:
+
+    * ``claim=True``  -> exactly one matching agent gets it (first read wins).
+    * ``claim=False`` -> every matching agent gets its own copy.
+    """
+
+    project: str | None  # None = wildcard
+    agent: str | None  # None = wildcard
+    role: str | None  # None = wildcard
+    claim: bool  # `any` appeared somewhere: deliver to exactly one
+
+    @property
+    def kind(self) -> str:
+        """Storage kind: ``claim`` (exactly once) or ``fanout`` (per-reader copy)."""
+        return "claim" if self.claim else "fanout"
+
+    @property
+    def is_specific(self) -> bool:
+        """Whether this names exactly one agent (no wildcards anywhere)."""
+        return self.project is not None and self.agent is not None
+
+
+def _parse_part(part: str) -> tuple[str | None, bool]:
+    """Resolve one address position to ``(literal_or_None, is_any)``."""
+    token = part.strip().replace("*", "all") or "all"
+    lowered = token.lower()
+    if lowered == "all":
+        return None, False
+    if lowered == "any":
+        return None, True
+    return token, False
+
+
+def parse_address(to: str) -> Target:
+    """Parse ``<project>[/<agent>[/<role>]]`` into a :class:`Target`.
+
+    Omitted trailing positions default to ``all``, so ``goldberg`` means every agent on
+    goldberg and ``goldberg/claude`` means every claude on it, whatever their role.
+    A bare ``any`` means one agent anywhere; a bare ``all`` (or ``*``) means everyone.
+
+    Raises :class:`ConfigError` on a malformed address or one with too many parts.
+    """
+    raw = to.strip()
+    parts = [p for p in raw.split("/")]
+    if len(parts) > 3:
+        raise ConfigError(
+            f"too many parts in address {to!r}: expected <project>[/<agent>[/<role>]]"
+        )
+    # A bare `any` means any/any/any; everything else defaults omitted parts to `all`.
+    if len(parts) == 1 and parts[0].strip().lower() == "any":
+        parts = ["any", "any", "any"]
+    parts += ["all"] * (3 - len(parts))
+
+    project, p_any = _parse_part(parts[0])
+    agent, a_any = _parse_part(parts[1])
+    role, r_any = _parse_part(parts[2])
+    if project is not None:
+        project = validate_project(project)
+    if agent is not None:
+        agent = validate_agent_id(agent)
+    if role is not None:
+        role = validate_role(role)
+    # A role can only be addressed under a concrete agent-or-wildcard; there is no
+    # ordering constraint beyond that, since each position narrows independently.
+    return Target(
+        project=project, agent=agent, role=role, claim=p_any or a_any or r_any
+    )
 
 
 def parse_target(to: str) -> tuple[str, str | None, str | None]:

@@ -25,7 +25,7 @@ from types import TracebackType
 
 import aiosqlite
 
-from agent_inbox.config import Config, format_address, parse_target
+from agent_inbox.config import Config, format_address, parse_address, parse_target
 from agent_inbox.exceptions import MailboxError
 from agent_inbox.models import AgentInfo, AgentProfile, Intent, Message
 
@@ -36,9 +36,14 @@ CREATE TABLE IF NOT EXISTS messages (
     id          TEXT PRIMARY KEY,
     from_addr   TEXT NOT NULL,
     to_addr     TEXT NOT NULL,
-    kind        TEXT NOT NULL,          -- 'direct' | 'any' | 'broadcast'
-    to_project  TEXT NOT NULL,
-    to_agent    TEXT,                   -- direct only; NULL for any/broadcast
+    -- Delivery: 'claim' = exactly one matching agent gets it (first read wins);
+    -- 'fanout' = every matching agent consumes its own copy.
+    kind        TEXT NOT NULL,
+    -- Each routing column is the literal it must match, or NULL for "any value"
+    -- (i.e. the address had `all`/`any`/nothing in that position).
+    to_project  TEXT,
+    to_agent    TEXT,
+    to_role     TEXT,
     thread      TEXT,
     intent      TEXT NOT NULL,
     subject     TEXT,                   -- optional; NULL when the sender omitted one
@@ -60,10 +65,11 @@ CREATE TABLE IF NOT EXISTS broadcast_reads (
 CREATE TABLE IF NOT EXISTS agents (
     project     TEXT NOT NULL,
     agent       TEXT NOT NULL,
+    role        TEXT NOT NULL DEFAULT '',     -- '' = this agent holds no role
     first_seen  TEXT NOT NULL,
     last_seen   TEXT NOT NULL,
     profile     TEXT NOT NULL DEFAULT '{}',   -- JSON AgentProfile
-    PRIMARY KEY (project, agent)
+    PRIMARY KEY (project, agent, role)
 );
 CREATE INDEX IF NOT EXISTS idx_agents_last_seen ON agents (last_seen);
 
@@ -180,6 +186,7 @@ class Mailbox:
         self._db.row_factory = aiosqlite.Row
         await self._db.execute("PRAGMA journal_mode=WAL")
         await self._db.execute("PRAGMA busy_timeout=5000")
+        await self._migrate()
         await self._db.executescript(_SCHEMA)
         # Stamp when this storage was created. INSERT OR IGNORE means an existing
         # store keeps its original timestamp — only a fresh file gets a new one.
@@ -189,6 +196,69 @@ class Mailbox:
         )
         await self._db.commit()
         await self._purge_expired()
+
+    async def _columns(self, table: str) -> set[str]:
+        cursor = await self._conn.execute(f"PRAGMA table_info({table})")
+        return {row["name"] for row in await cursor.fetchall()}
+
+    async def _table_exists(self, table: str) -> bool:
+        cursor = await self._conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)
+        )
+        return await cursor.fetchone() is not None
+
+    async def _migrate(self) -> None:
+        """Upgrade a pre-three-part store in place. Never destructive.
+
+        Losing the store once already cost us: agents silently re-derived addresses
+        against an empty directory and one project split across two names. So this
+        adds columns and rewrites values, and never drops a message.
+        """
+        if await self._table_exists("messages"):
+            cols = await self._columns("messages")
+            if "to_role" not in cols:
+                logger.info("migrating messages to three-part addressing")
+                await self._conn.execute("ALTER TABLE messages ADD COLUMN to_role TEXT")
+                # Old kinds collapse onto the two delivery modes.
+                await self._conn.execute(
+                    "UPDATE messages SET kind = 'fanout' "
+                    "WHERE kind IN ('broadcast', 'public')"
+                )
+                await self._conn.execute(
+                    "UPDATE messages SET kind = 'claim' "
+                    "WHERE kind IN ('direct', 'any', 'global_any')"
+                )
+                # '' meant "no project scope"; NULL is now the wildcard.
+                await self._conn.execute(
+                    "UPDATE messages SET to_project = NULL WHERE to_project = ''"
+                )
+                await self._conn.commit()
+
+        if await self._table_exists("agents"):
+            cols = await self._columns("agents")
+            if "role" not in cols:
+                logger.info("migrating agents table to include role")
+                # SQLite can't alter a primary key, so rebuild and copy every row.
+                await self._conn.executescript(
+                    """
+                    CREATE TABLE agents_v2 (
+                        project     TEXT NOT NULL,
+                        agent       TEXT NOT NULL,
+                        role        TEXT NOT NULL DEFAULT '',
+                        first_seen  TEXT NOT NULL,
+                        last_seen   TEXT NOT NULL,
+                        profile     TEXT NOT NULL DEFAULT '{}',
+                        PRIMARY KEY (project, agent, role)
+                    );
+                    INSERT INTO agents_v2 (project, agent, role, first_seen,
+                                           last_seen, profile)
+                        SELECT project, agent, '', first_seen, last_seen, profile
+                        FROM agents;
+                    DROP TABLE agents;
+                    ALTER TABLE agents_v2 RENAME TO agents;
+                    """
+                )
+                await self._conn.commit()
 
     async def close(self) -> None:
         """Close the SQLite connection."""
@@ -254,20 +324,20 @@ class Mailbox:
                 f"message too large: {len(payload)} bytes exceeds the hub's max of "
                 f"{cap} bytes (see hub_info -> limits)"
             )
-        kind, project, agent = parse_target(message.to)
-        # Global kinds (public / global_any) have no project scope; store "" (the
-        # column is NOT NULL and real projects are never empty).
+        target = parse_address(message.to)
+        # Each routing column is the literal to match, or NULL for "any value".
         await self._conn.execute(
             "INSERT INTO messages (id, from_addr, to_addr, kind, to_project, "
-            "to_agent, thread, intent, subject, body, created, acked_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)",
+            "to_agent, to_role, thread, intent, subject, body, created, acked_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)",
             (
                 message.id,
                 message.from_,
                 message.to,
-                kind,
-                project or "",
-                agent,
+                target.kind,
+                target.project,
+                target.agent,
+                target.role,
                 message.thread,
                 message.intent.value,
                 message.subject,
@@ -279,60 +349,66 @@ class Mailbox:
         logger.debug("sent %s -> %s (%s)", message.from_, message.to, message.id)
         return message
 
-    async def peek(self, project: str, agent: str) -> list[Message]:
-        """Return unread messages for ``project/agent`` without consuming them."""
-        reader = format_address(project, agent)
-        # Fan-out and claim-anywhere kinds skip their own sender — you should never
-        # receive your own broadcast. Direct is exempt: `ping` self-sends deliberately.
+    # A message is routed to a reader when every position either matches the reader's
+    # value or is NULL ("any value"). Defined once so peek and read can never drift.
+    _ROUTES_TO = (
+        "(to_project IS NULL OR to_project = :proj)"
+        " AND (to_agent IS NULL OR to_agent = :agent)"
+        " AND (to_role IS NULL OR to_role = :role)"
+    )
+    # You never receive your own fan-out. A `claim` addressed at exactly one agent is
+    # exempt so that a deliberate self-send still works — `ping` relies on it.
+    _NOT_MY_OWN_FANOUT = "NOT (kind = 'fanout' AND from_addr = :me)"
+
+    def _reader(self, project: str, agent: str, role: str | None) -> dict[str, str]:
+        return {
+            "proj": project,
+            "agent": agent,
+            "role": role or "",
+            "me": format_address(project, agent, role),
+        }
+
+    async def peek(
+        self, project: str, agent: str, role: str | None = None
+    ) -> list[Message]:
+        """Return unread messages routed to this agent, without consuming them."""
+        params = self._reader(project, agent, role)
         cursor = await self._conn.execute(
-            "SELECT * FROM messages "
-            "WHERE acked_at IS NULL AND ("
-            "  (kind = 'direct' AND to_project = ? AND to_agent = ?)"
-            "  OR (kind = 'any' AND to_project = ? AND from_addr != ?)"
-            "  OR (kind = 'global_any' AND from_addr != ?)"
-            "  OR (kind = 'broadcast' AND to_project = ? AND from_addr != ?"
-            "      AND id NOT IN ("
-            "        SELECT message_id FROM broadcast_reads WHERE reader = ?))"
-            "  OR (kind = 'public' AND from_addr != ? AND id NOT IN ("
-            "        SELECT message_id FROM broadcast_reads WHERE reader = ?))"
-            ") ORDER BY created ASC",
-            (
-                project,
-                agent,
-                project,
-                reader,
-                reader,
-                project,
-                reader,
-                reader,
-                reader,
-                reader,
-            ),
+            "SELECT * FROM messages WHERE acked_at IS NULL"
+            f" AND {self._ROUTES_TO}"
+            f" AND {self._NOT_MY_OWN_FANOUT}"
+            " AND (kind = 'claim' OR id NOT IN ("
+            "     SELECT message_id FROM broadcast_reads WHERE reader = :me))"
+            " ORDER BY created ASC",
+            params,
         )
         rows = await cursor.fetchall()
         return [_row_to_message(row) for row in rows]
 
-    async def read(self, project: str, agent: str, message_id: str) -> Message:
+    async def read(
+        self, project: str, agent: str, message_id: str, role: str | None = None
+    ) -> Message:
         """Return the message with ``message_id`` and consume it for this agent.
 
-        For **direct**/**any** messages this claims the row atomically (first reader
-        wins — so an ``any`` message is delivered exactly once). For **broadcast** it
-        records that *this* agent has consumed its copy; other agents still see theirs.
+        A **claim** message is taken atomically (first reader wins, so it is delivered
+        exactly once). A **fanout** message records that *this* agent consumed its own
+        copy; every other matching agent still sees theirs.
+
+        The caller must be routed the message — the same predicate ``peek`` uses — so
+        you cannot read mail that wasn't addressed to you.
         """
+        params = self._reader(project, agent, role)
+        params["id"] = message_id
         cursor = await self._conn.execute(
-            "SELECT * FROM messages WHERE id = ?", (message_id,)
+            f"SELECT * FROM messages WHERE id = :id AND {self._ROUTES_TO}",
+            params,
         )
         row = await cursor.fetchone()
-        if row is None:
+        if row is None:  # no such message, or not routed to this agent
             raise self._not_found(project, agent, message_id)
 
-        kind = row["kind"]
-        if kind in ("broadcast", "public"):
-            # fan-out kinds: each agent consumes its own copy. 'public' spans all
-            # projects, so it has no project scope to check.
-            if kind == "broadcast" and row["to_project"] != project:
-                raise self._not_found(project, agent, message_id)
-            reader = format_address(project, agent)
+        reader = params["me"]
+        if row["kind"] == "fanout":
             seen = await (
                 await self._conn.execute(
                     "SELECT 1 FROM broadcast_reads WHERE message_id = ? AND reader = ?",
@@ -347,19 +423,13 @@ class Mailbox:
                 (message_id, reader, _now_iso()),
             )
             await self._conn.commit()
-        else:  # claim kinds: direct, any (project), global_any (anywhere)
-            if kind == "direct" and (
-                row["to_project"] != project or row["to_agent"] != agent
-            ):
-                raise self._not_found(project, agent, message_id)
-            if kind == "any" and row["to_project"] != project:
-                raise self._not_found(project, agent, message_id)
+        else:  # claim: exactly one reader may take it
             claim = await self._conn.execute(
                 "UPDATE messages SET acked_at = ? WHERE id = ? AND acked_at IS NULL",
                 (_now_iso(), message_id),
             )
             await self._conn.commit()
-            if claim.rowcount != 1:  # already consumed (e.g. another agent won the any)
+            if claim.rowcount != 1:  # already consumed (another agent won the claim)
                 raise self._not_found(project, agent, message_id)
 
         logger.debug("read %s from %s/%s", message_id, project, agent)
@@ -406,42 +476,48 @@ class Mailbox:
 
     # -- directory / presence ---------------------------------------------
 
-    async def touch(self, project: str, agent: str) -> None:
-        """Record that ``project/agent`` was just active (upsert ``last_seen``)."""
+    async def touch(self, project: str, agent: str, role: str | None = None) -> None:
+        """Record that this agent was just active (upsert ``last_seen``)."""
         now = _now_iso()
         await self._conn.execute(
-            "INSERT INTO agents (project, agent, first_seen, last_seen) "
-            "VALUES (?, ?, ?, ?) "
-            "ON CONFLICT(project, agent) DO UPDATE SET last_seen = excluded.last_seen",
-            (project, agent, now, now),
+            "INSERT INTO agents (project, agent, role, first_seen, last_seen) "
+            "VALUES (?, ?, ?, ?, ?) "
+            "ON CONFLICT(project, agent, role) DO UPDATE SET "
+            "last_seen = excluded.last_seen",
+            (project, agent, role or "", now, now),
         )
         await self._conn.commit()
 
     async def register(
-        self, project: str, agent: str, profile: AgentProfile
+        self,
+        project: str,
+        agent: str,
+        profile: AgentProfile,
+        role: str | None = None,
     ) -> AgentInfo:
-        """Set ``project/agent``'s profile (and mark it active). Returns the entry."""
+        """Set this agent's profile (and mark it active). Returns the entry."""
         now = _now_iso()
         await self._conn.execute(
-            "INSERT INTO agents (project, agent, first_seen, last_seen, profile) "
-            "VALUES (?, ?, ?, ?, ?) "
-            "ON CONFLICT(project, agent) DO UPDATE SET "
+            "INSERT INTO agents (project, agent, role, first_seen, last_seen, profile) "
+            "VALUES (?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(project, agent, role) DO UPDATE SET "
             "last_seen = excluded.last_seen, profile = excluded.profile",
-            (project, agent, now, now, profile.model_dump_json()),
+            (project, agent, role or "", now, now, profile.model_dump_json()),
         )
         await self._conn.commit()
-        info = await self.whois(project, agent)
+        info = await self.whois(project, agent, role)
         assert info is not None  # just inserted
         return info
 
-    async def retire(self, project: str, agent: str) -> bool:
+    async def retire(self, project: str, agent: str, role: str | None = None) -> bool:
         """Remove a directory entry. Returns whether one was actually removed.
 
         Used to tombstone a **superseded identity** — e.g. after re-deriving your
         address you retire the old one so the room isn't full of your ghosts.
         """
         cursor = await self._conn.execute(
-            "DELETE FROM agents WHERE project = ? AND agent = ?", (project, agent)
+            "DELETE FROM agents WHERE project = ? AND agent = ? AND role = ?",
+            (project, agent, role or ""),
         )
         await self._conn.commit()
         return cursor.rowcount > 0
@@ -485,10 +561,12 @@ class Mailbox:
         stale = self._config.stale_days > 0 and idle > timedelta(
             days=self._config.stale_days
         )
+        role = row["role"] or None
         return AgentInfo(
             project=row["project"],
             agent=row["agent"],
-            address=format_address(row["project"], row["agent"]),
+            role=role,
+            address=format_address(row["project"], row["agent"], role),
             first_seen=datetime.fromisoformat(row["first_seen"]),
             last_seen=last_seen,
             online=online,
@@ -532,10 +610,13 @@ class Mailbox:
             return agents
         return [a for a in agents if not a.stale]
 
-    async def whois(self, project: str, agent: str) -> AgentInfo | None:
+    async def whois(
+        self, project: str, agent: str, role: str | None = None
+    ) -> AgentInfo | None:
         """Return one agent's directory entry, or ``None`` if never registered."""
         cursor = await self._conn.execute(
-            "SELECT * FROM agents WHERE project = ? AND agent = ?", (project, agent)
+            "SELECT * FROM agents WHERE project = ? AND agent = ? AND role = ?",
+            (project, agent, role or ""),
         )
         row = await cursor.fetchone()
         return self._row_to_agent_info(row) if row else None
@@ -545,28 +626,24 @@ class Mailbox:
     # These power the human web console. Unlike ``read``/``peek`` they NEVER ack or
     # claim a message, so observing another agent's mailbox can't steal its mail.
 
-    async def browse(self, project: str, agent: str) -> list[tuple[Message, bool]]:
+    async def browse(
+        self, project: str, agent: str, role: str | None = None
+    ) -> list[tuple[Message, bool]]:
         """All messages routed to ``project/agent`` (read *and* unread), newest first.
 
         Returns ``(message, unread)`` pairs. Purely observational — it never consumes,
         so it is safe to point at *any* agent's mailbox.
         """
-        reader = format_address(project, agent)
+        reader = format_address(project, agent, role)
         cursor = await self._conn.execute(
-            "SELECT * FROM messages WHERE "
-            "  (kind = 'direct' AND to_project = ? AND to_agent = ?)"
-            "  OR (kind = 'any' AND to_project = ?)"
-            "  OR (kind = 'global_any')"
-            "  OR (kind = 'broadcast' AND to_project = ?)"
-            "  OR (kind = 'public')"
-            " ORDER BY created DESC",
-            (project, agent, project, project),
+            f"SELECT * FROM messages WHERE {self._ROUTES_TO} ORDER BY created DESC",
+            self._reader(project, agent, role),
         )
         rows = await cursor.fetchall()
         read_ids = await self._reader_broadcast_ids(reader)
         items: list[tuple[Message, bool]] = []
         for row in rows:
-            if row["kind"] in ("broadcast", "public"):
+            if row["kind"] == "fanout":
                 unread = row["id"] not in read_ids
             else:
                 unread = row["acked_at"] is None
@@ -601,8 +678,7 @@ class Mailbox:
         # Unread = direct/any/global_any not yet acked. (Broadcast/public unread is
         # per-reader; we count the simple claim kinds for an at-a-glance figure.)
         unread = await self._scalar(
-            "SELECT COUNT(*) FROM messages "
-            "WHERE kind IN ('direct','any','global_any') AND acked_at IS NULL"
+            "SELECT COUNT(*) FROM messages WHERE kind = 'claim' AND acked_at IS NULL"
         )
         agents = await self.list_agents()
         online = sum(1 for a in agents if a.online)
@@ -635,22 +711,46 @@ class Mailbox:
 
     def _party_clause(self) -> str:
         """SQL matching every message the caller is party to (sent or addressed to)."""
-        return (
-            "(from_addr = :me"
-            " OR (kind = 'direct' AND to_project = :proj AND to_agent = :agent)"
-            " OR (kind IN ('any','broadcast') AND to_project = :proj)"
-            " OR kind IN ('public','global_any'))"
-        )
+        return f"(from_addr = :me OR ({self._ROUTES_TO}))"
 
-    async def _party_params(self, project: str, agent: str) -> dict[str, str]:
-        return {
-            "me": format_address(project, agent),
-            "proj": project,
-            "agent": agent,
-        }
+    async def _party_params(
+        self, project: str, agent: str, role: str | None = None
+    ) -> dict[str, str]:
+        return self._reader(project, agent, role)
+
+    async def _read_state(self, message_ids: list[str]) -> dict[str, str | None]:
+        """When each message was consumed, whichever delivery mode it used.
+
+        A `claim` records consumption on the row (`acked_at`); a `fanout` records it
+        per-reader in `broadcast_reads`. Callers asking "have they read it yet?" must
+        not care which — so this normalises both into one map.
+        """
+        if not message_ids:
+            return {}
+        marks = ",".join("?" * len(message_ids))
+        state: dict[str, str | None] = {}
+        cursor = await self._conn.execute(
+            f"SELECT id, acked_at FROM messages WHERE id IN ({marks})",
+            tuple(message_ids),
+        )
+        for row in await cursor.fetchall():
+            state[row["id"]] = row["acked_at"]
+        cursor = await self._conn.execute(
+            f"SELECT message_id, MIN(acked_at) AS first_read FROM broadcast_reads "
+            f"WHERE message_id IN ({marks}) GROUP BY message_id",
+            tuple(message_ids),
+        )
+        for row in await cursor.fetchall():
+            if not state.get(row["message_id"]):
+                state[row["message_id"]] = row["first_read"]
+        return state
 
     async def list_threads(
-        self, project: str, agent: str, limit: int = 50
+        self,
+        project: str,
+        agent: str,
+        limit: int = 50,
+        role: str | None = None,
     ) -> list[ThreadSummary]:
         """Threads this agent is party to — **including ones it started**.
 
@@ -669,6 +769,7 @@ class Mailbox:
         for row in rows:
             by_thread.setdefault(row["thread"] or row["id"], []).append(row)
 
+        read_state = await self._read_state([r["id"] for r in rows])
         summaries: list[ThreadSummary] = []
         for thread_id, turns in by_thread.items():
             last = turns[-1]
@@ -678,7 +779,7 @@ class Mailbox:
                     if addr != me and addr not in others:
                         others.append(addr)
             # "awaiting them" = the last word is mine and they haven't consumed it
-            awaiting = last["from_addr"] == me and last["acked_at"] is None
+            awaiting = last["from_addr"] == me and not read_state.get(last["id"])
             subject = next((r["subject"] for r in turns if r["subject"]), None)
             summaries.append(
                 ThreadSummary(
@@ -695,15 +796,19 @@ class Mailbox:
         return summaries[:limit]
 
     async def read_thread(
-        self, project: str, agent: str, thread_id: str
+        self,
+        project: str,
+        agent: str,
+        thread_id: str,
+        role: str | None = None,
     ) -> list[ThreadTurn] | None:
         """Every turn on a thread, in order, with read-state. Read-only — never acks.
 
         Returns ``None`` if the thread doesn't exist **or the caller isn't party to
         it** (the two are deliberately indistinguishable from outside).
         """
-        me = format_address(project, agent)
-        params = await self._party_params(project, agent)
+        me = format_address(project, agent, role)
+        params = await self._party_params(project, agent, role)
         params["thread"] = thread_id
         cursor = await self._conn.execute(
             "SELECT * FROM messages WHERE thread = :thread ORDER BY created ASC",
@@ -719,10 +824,11 @@ class Mailbox:
         )
         if await check.fetchone() is None:
             return None  # not your thread
+        read_state = await self._read_state([r["id"] for r in rows])
         return [
             ThreadTurn(
                 message=_row_to_message(row),
-                read_at=row["acked_at"],
+                read_at=read_state.get(row["id"]),
                 mine=row["from_addr"] == me,
             )
             for row in rows
@@ -736,7 +842,7 @@ class Mailbox:
         recipient node — so those are returned as a ``broadcast_count`` footnote.
         A→B and B→A are distinct edges, so per-direction counts fall out naturally.
         """
-        where = "kind = 'direct'"
+        where = "to_project IS NOT NULL AND to_agent IS NOT NULL"
         params: tuple[object, ...] = ()
         if since is not None:
             where += " AND created >= ?"
@@ -752,7 +858,8 @@ class Mailbox:
             for r in await cursor.fetchall()
         ]
         broadcast_count = await self._scalar(
-            "SELECT COUNT(*) FROM messages WHERE kind != 'direct'"
+            "SELECT COUNT(*) FROM messages "
+            "WHERE (to_project IS NULL OR to_agent IS NULL)"
             + (" AND created >= ?" if since is not None else ""),
             params,
         )
@@ -778,7 +885,7 @@ class Mailbox:
         """Direct messages ``frm`` -> ``to`` in the window, newest first (read-only)."""
         sql = (
             "SELECT * FROM messages "
-            "WHERE kind = 'direct' AND from_addr = ? AND to_addr = ?"
+            "WHERE to_agent IS NOT NULL AND from_addr = ? AND to_addr = ?"
         )
         params: list[object] = [frm, to]
         if since is not None:
