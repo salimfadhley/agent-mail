@@ -17,46 +17,45 @@ Both exposed as CLI verbs and MCP tools.
 ## Why
 
 Today a sender can address `project/agent` with **no way to know whether that agent exists or is
-connected** — mail to a non-existent or offline recipient **vanishes silently** (it sits durable
-in JetStream, but nobody is listening, and the sender gets no signal). The reporter hit exactly
-this: sent to `agent_mail/admin` with no way to tell if `admin` was even there. Presence +
+connected** — mail to a non-existent or offline recipient **vanishes silently** (the row sits
+durable in SQLite, but nobody ever reads it, and the sender gets no signal). The reporter hit
+exactly this: sent to `agent_mail/admin` with no way to tell if `admin` was even there. Presence +
 receipts turn "I sent it into the void" into "I know it landed / I know nobody's home."
 
 ## Design (the important part)
 
 ### Presence / `list_agents`
-- **Derive from durable consumers, don't add a registry to maintain.** Each agent already owns a
-  durable pull consumer (`own_durable(project, agent)`). Enumerating the `AGENT_MAIL` stream's
-  consumers yields the set of agents that have ever connected, per project (parse the durable
-  name back to `project/agent`).
-- **Last-seen / online.** JetStream consumer info exposes activity (e.g. last-delivered /
-  last-active). Use that for `last_seen`; treat "active within N seconds" as online. Be honest in
-  docs that this is *has-a-consumer + recently-active*, not a hard liveness guarantee — an agent
-  process can die without tearing down its durable consumer.
-- **Shape.** `list_agents(project?) -> [{project, agent, last_seen, online}]`.
+- **A tiny `presence` table, updated on activity — no daemon.** Add `presence(project, agent,
+  last_seen)` (PK `project, agent`). On every operation an identified agent performs
+  (`peek`/`read`/`send`/`ping`), upsert `last_seen = now`. That single write per call is cheap and
+  needs no heartbeat process.
+- **Last-seen / online.** `last_seen` is the upserted timestamp; treat "active within N seconds"
+  as online. Be honest in docs that this is *recently-did-something*, not a hard liveness
+  guarantee — an agent that goes idle looks offline, and one that died mid-turn looks online until
+  the window lapses.
+- **Shape.** `list_agents(project?) -> [{project, agent, last_seen, online}]`. "Exists" = has a
+  `presence` row (ever connected) or appears as a `from`/`to` in `messages`.
 
 ### Receipts
-- **Delivery receipt** (cheap): derivable — a message delivered off the stream to a consumer.
-  Simplest honest version: "recipient has an active consumer that will see this subject" at send
-  time (piggybacks on presence).
-- **Seen receipt** (the harder half): fires when the recipient **acks** (reads) the message. Needs
-  either (a) a receipt subject the recipient's `read` path publishes back to the sender, or (b) the
-  sender long-polling a receipts consumer. Scope honestly: option (a) means `read`/`ack` emits a
-  small `agent.mail.receipt.<sender>` event; the sender can `wait_for` it. Depends conceptually on
-  [0003 wait_for_message](0003-wait-for-message.md) for the "block until seen" ergonomic.
+- **Delivery receipt** (cheap): at send time, check whether the target address has a recent
+  `presence` row — "is anyone home?" — and return it alongside the send result.
+- **Seen receipt** (the harder half): fires when the recipient consumes the message. With SQLite
+  this is just reading state the store already has — `acked_at` on the row (direct/any) or a
+  `broadcast_reads` entry (broadcast). Expose `message_status(id) -> {delivered, seen_by[...]}`,
+  and pair with [0003 wait_for_message](0003-wait-for-message.md) for a "block until seen" helper.
 
 ## Definition of done
 
 - `Mailbox.list_agents(project?)` on the core; CLI `agents` verb + MCP `list_agents` tool.
-- Presence derived from JetStream consumer metadata — no separate registry, no heartbeat daemon.
+- A `presence` table upserted on identified operations — no separate service, no heartbeat daemon.
 - Docs state plainly what "online"/"last_seen" do and don't guarantee.
-- Receipts: at minimum a **delivery** check ("does a live consumer exist for this address?") usable
-  pre-send; **seen** receipts specified, and built if 0003 lands first.
-- Tests: unit (parse consumers → agent list) + integration (`AGENT_MAIL_INTEGRATION=1`) asserting a
-  freshly-connected agent shows up in `list_agents` and drops to offline after inactivity.
+- Receipts: a **delivery** check ("does the target have a recent presence row?") usable pre-send;
+  a **seen** check derived from `acked_at` / `broadcast_reads`.
+- Tests (normal CI, temp-file SQLite): a freshly-active agent shows up in `list_agents` and drops
+  to offline after its window lapses; a read message reports `seen`.
 
 ## Non-goals
 
-- A separate presence service / heartbeat daemon (derive from what JetStream already tracks).
+- A separate presence service / heartbeat daemon (a single `last_seen` upsert on activity suffices).
 - Hard liveness guarantees. - Read-receipts that require recipient cooperation beyond the normal
   `read`/ack it already does.

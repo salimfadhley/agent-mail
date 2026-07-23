@@ -1,49 +1,37 @@
-# Mission brief — SQLite backend (zero-infrastructure mode)
+# Mission brief — SQLite backend (the storage engine)
 
-**Status:** planned · **Kind:** alternative backend · **Unlocks:** run with no external services
+**Status:** ✅ shipped (2026-07-23) · **Kind:** core storage · **Superseded** NATS/JetStream
 
-## What
+## Outcome
 
-A second mailbox backend backed by a local **SQLite** file, selectable via config, so
-agent-mail runs with **no NATS server** — `pip install agent-mail`, run, done. NATS
-stays the choice for LAN / multi-host; SQLite is the super-lightweight single-box option.
+SQLite is now agent-mail's **only** storage backend. There is no external service:
+`uv tool install agent-mail`, set your identity, run. NATS/JetStream were removed
+entirely (and the planned Elasticsearch audit log was dropped) — simplicity beat
+features that cost a broker. See [ADR 0002](../decisions/0002-sqlite-backend.md) for
+the decision and rationale.
 
-## Why
+## What shipped
 
-The current hard dependency on a running NATS+JetStream server is the biggest barrier
-to "just try it." For agents sharing one machine (the common case), a local SQLite file
-gives a durable inbox with zero infrastructure. Lowering the floor to nothing widens
-adoption enormously.
+- **One SQLite file** (`AGENT_MAIL_DB`, default `~/.local/share/agent-mail/agent-mail.db`;
+  `/data/agent-mail.db` on a mounted volume in the container). `Mailbox` was
+  reimplemented on `aiosqlite` keeping the same method surface, so the CLI and MCP
+  server were unchanged.
+- **Addressing preserved:** direct (`project/agent`), any (`project` — an atomic
+  claim, so exactly-once), broadcast (`project/*` — per-reader fan-out via a
+  `broadcast_reads` table).
+- **`notify` is a best-effort no-op** — SQLite can't push cross-process, and the model
+  is already "check your inbox every turn." Kept for API symmetry and future push-capable
+  backends.
+- **Automatic expiry:** messages older than `ttl_days` (default 14; 0 disables) are
+  purged when the mailbox opens — the simple one-file retention rule.
+- **`max_message_bytes`** (default 1 MiB) enforced on send; advertised via `hub_info`.
+- Tests need no external service — the former live-JetStream suite is now a normal
+  temp-file SQLite suite that runs in CI.
 
-## Design (the important part)
+## Follow-ons unlocked by this
 
-- **Extract a `MailStore` protocol** from today's NATS-specific `Mailbox`: the five
-  verbs (`send`, `peek`, `read`, `reply`, `notify`) plus `ping`. The CLI and MCP server
-  already delegate to one core, so they need no changes.
-- **Two implementations:** `NatsStore` (today's behavior) and `SqliteStore`. Select with
-  `AGENT_MAIL_BACKEND=nats|sqlite`; SQLite path via `AGENT_MAIL_DB`.
-- **SQLite specifics:** a `messages` table (id, from, to, thread, intent, subject, body,
-  created, acked_at); peek = unread rows, read = set `acked_at`. Use **WAL mode +
-  busy_timeout** so multiple processes (CLI, server, several agents) on the box coexist.
-- **Honest capability differences:** no cross-process *wake* (SQLite can't push), so
-  `notify` is a local best-effort no-op — which is fine, because the model is already
-  "check your inbox every turn." Single machine (or shared filesystem) only; no LAN.
-- **`doctor`/`hub_info`** report the active backend so operators/agents can see it.
-
-## Config (add to the config system)
-
-`backend` (`nats` | `sqlite`, default `nats`), `db` (SQLite file path). Document under
-[`../configuration.md`](../configuration.md).
-
-## Definition of done
-
-- `MailStore` protocol + `NatsStore` + `SqliteStore`; core wiring selects by config.
-- The existing integration suite is **parametrized over both backends** (the sqlite
-  parametrization needs no external service, so it runs in normal CI).
-- `agent-mail doctor` validates the DB path / backend.
-- Docs: a "no-infrastructure quickstart" using the SQLite backend.
-
-## Non-goals
-
-- Multi-host or high-concurrency (that's what the NATS backend is for). - Replacing
-  NATS. - A network wake signal in SQLite mode.
+- **[0003 wait_for_message](0003-wait-for-message.md)** is now cleaner: a server-side
+  poll/condition on the SQLite table gives true send-then-wait in the single hosted
+  process — no broker needed.
+- **[0004 presence & discovery](0004-presence-discovery.md)** derives from the
+  `messages` table / active identities rather than JetStream consumer metadata.

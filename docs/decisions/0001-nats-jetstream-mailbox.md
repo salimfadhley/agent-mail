@@ -1,8 +1,14 @@
 # ADR 0001 — NATS JetStream as the agent mailbox (and a Claim-Check option for payloads)
 
-- Status: Accepted
+- Status: **Superseded by [ADR 0002](0002-sqlite-backend.md)** (2026-07-23)
 - Date: 2026-07-22
 - Context: `agent-mail` — inter-agent messaging for local LLM agents
+
+> **Superseded.** agent-mail shipped on NATS/JetStream, then replaced it with a single
+> local SQLite file. The problem framing below still holds (durable store + a wake
+> signal + a per-agent listener); the conclusion that NATS is the right store does not.
+> The hosted HTTP hub already provides cross-host reach, so NATS was paying operational
+> cost for a benefit we get elsewhere. See [ADR 0002](0002-sqlite-backend.md).
 
 ## Context
 

@@ -1,18 +1,20 @@
-# Roadmap — future missions
+# Roadmap — missions
 
-Self-contained briefs for planned work. Each is ready to promote into a full mission
-with `/spec-kitty.specify` when someone picks it up.
+Self-contained briefs. Planned ones are ready to promote into a full mission with
+`/spec-kitty.specify` when someone picks them up.
 
-| # | Mission | What it adds | Kind |
-|---|---------|--------------|------|
-| [0001](0001-elasticsearch-audit-log.md) | Elasticsearch audit log | Optional NATS→ES subscriber: searchable history + dashboards | Additive |
-| [0002](0002-sqlite-backend.md) | SQLite backend | A zero-infrastructure single-box mode (no NATS server) | Alternative backend |
-| [0003](0003-wait-for-message.md) | `wait_for_message` long-poll | Server-side block for a reply — no client-side poll loop | Additive verb |
-| [0004](0004-presence-discovery.md) | Presence & discovery | `list_agents` + last-seen + delivery/seen receipts | Additive |
+| # | Mission | What it is | Status |
+|---|---------|------------|--------|
+| [0002](0002-sqlite-backend.md) | SQLite backend | The single-file storage engine (replaced NATS/JetStream) | ✅ shipped |
+| [0003](0003-wait-for-message.md) | `wait_for_message` long-poll | Server-side block for a reply — no client-side poll loop | planned |
+| [0004](0004-presence-discovery.md) | Presence & discovery | `list_agents` + last-seen + delivery/seen receipts | planned |
 
-None change today's behavior: Elasticsearch is opt-in and NATS stays authoritative; the
-SQLite backend is selectable and off by default; the new verbs are additive.
+**0001 (Elasticsearch audit log) was dropped:** with SQLite the `messages` table is
+already the durable, queryable history, so a separate search store isn't worth the
+operational cost. **0002 (SQLite) shipped** on 2026-07-23 and is now the only backend
+(see [ADR 0002](../decisions/0002-sqlite-backend.md)).
 
-0003 and 0004 come from real hub-user feedback (`maison_eternelle/opus`, 2026-07-23): "send
-then wait" shouldn't need a client-side poll loop, and a sender should be able to tell whether
-a recipient exists and is live before relying on a reply.
+0003 and 0004 are additive and come from real hub-user feedback (`maison_eternelle/opus`,
+2026-07-23): "send then wait" shouldn't need a client-side poll loop, and a sender should be
+able to tell whether a recipient exists and is live before relying on a reply. Both are
+cleaner on SQLite than they would have been on NATS (a single process owns the store).

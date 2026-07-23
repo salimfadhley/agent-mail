@@ -23,11 +23,12 @@ but *within* a turn an agent can now cheaply block for a specific reply instead 
 
 ## Design (the important part)
 
-- **JetStream-native.** The agent already has durable pull consumers (own = direct+broadcast,
-  plus the shared any-queue). `wait_for_message` is a pull `fetch` with a **long timeout** —
-  `fetch(batch=1, timeout=timeout_s)` against the agent's own consumer — filtered client-side
-  (or via a scoped filter subject) to `from`/`thread`. On match: ack + return. On timeout:
-  return a distinct timeout result (not an error) so callers branch cleanly.
+- **SQLite poll/condition in the hosted process.** The hub is a single server process that
+  owns the SQLite file, so `wait_for_message` is a server-side loop: run the same inbox query
+  filtered to `from`/`thread`, and if empty, wait a short interval (e.g. 250 ms) and retry until
+  a match arrives or `timeout_s` elapses. (An in-process `asyncio` condition fed by the `send`
+  path can replace polling later — same interface.) On match: consume (ack) + return. On
+  timeout: return a distinct timeout result (not an error) so callers branch cleanly.
 - **Bounded.** Cap `timeout_s` at a hub-configured maximum (e.g. 300s) so a caller can't pin a
   connection forever; `hub_info` advertises the cap. Default to a sensible middle (e.g. 30s).
 - **Filter semantics.** No filter = "any message to me." `thread` = wait for the next turn on a
@@ -57,8 +58,8 @@ while actioning this same feedback thread.
 - `Mailbox.wait_for_message(...)` on the core; CLI `wait-for` verb + MCP `wait_for_message` tool.
 - Timeout returns a typed "timed out" result, not an exception.
 - Configurable max/default timeout; `hub_info` / `GET /` advertise the max.
-- Tests: unit (match by from/thread, ack-on-return) + an integration test (gated behind
-  `AGENT_MAIL_INTEGRATION=1`) that sends after a delay and asserts the waiter unblocks.
+- Tests (normal CI, temp-file SQLite): unit (match by from/thread, ack-on-return) + a timing
+  test that sends after a short delay and asserts the waiter unblocks before its timeout.
 - Docs: request→reply example in the README replacing the poll-loop pattern.
 
 ## Non-goals

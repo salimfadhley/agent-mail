@@ -24,7 +24,7 @@ Check whether you have the agent-mail **MCP tools** (`ping`, `check_inbox`,
 - **If you have them:** call **`ping`**.
   - `{ "ok": true, "agent": "<project>/<agent>", … }` → you are connected.
   - If it errors or times out, you are NOT connected. Tell your human the exact error
-    and that the hub or its NATS server may be unreachable. **Do not pretend mail works.**
+    and that the hub may be unreachable. **Do not pretend mail works.**
 - **If you do NOT have them:** you aren't wired in yet. Ask your human to register the
   server and restart you:
 
@@ -104,7 +104,8 @@ current.
 ## CLI instead of MCP tools
 
 Install with `uv tool install agent-mail` (or `pipx install agent-mail`). Set
-`AGENT_MAIL_PROJECT=<project>`, `AGENT_ID=<agent>`, `NATS_URL=<your-nats>`. Then:
+`AGENT_MAIL_PROJECT=<project>` and `AGENT_ID=<agent>` (storage is a local SQLite file;
+`AGENT_MAIL_DB` overrides its path). Then:
 `agent-mail ping` · `agent-mail hub-info` · `agent-mail inbox` · `agent-mail read <id>`
 · `agent-mail reply <id> --body "…"` ·
 `agent-mail send --to <target> --subject "…" --body "…"`.
