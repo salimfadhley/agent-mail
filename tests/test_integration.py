@@ -7,6 +7,7 @@ so these run in normal CI.
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
@@ -257,3 +258,109 @@ async def test_expiry_purges_old_messages(tmp_path: Path) -> None:
     async with Mailbox(config) as mb:
         subjects = {m.subject for m in await mb.peek("p", "bob")}
     assert subjects == {"fresh"}
+
+
+# -- mission 0009: hub feedback from the host --------------------------------
+
+
+async def test_sender_does_not_receive_own_broadcast(mailbox: Mailbox) -> None:
+    """An all/all broadcast must not land back in the sender's own inbox."""
+    project = _project()
+    await mailbox.register(project, "alice", AgentProfile())
+    shout = Message(from_=f"{project}/alice", to="all/all", subject="hi", body="all")
+    await mailbox.send(shout)
+
+    assert all(m.id != shout.id for m in await mailbox.peek(project, "alice"))
+    # ...but everyone else still gets it
+    assert any(m.id == shout.id for m in await mailbox.peek(project, "bob"))
+
+
+async def test_direct_self_send_still_works(mailbox: Mailbox) -> None:
+    """ping self-sends a direct message — that must keep working."""
+    project = _project()
+    received = await mailbox.ping(project, "alice")
+    assert received.from_ == f"{project}/alice"
+
+
+async def test_storage_initialized_at_is_stamped_and_stable(mailbox: Mailbox) -> None:
+    first = await mailbox.storage_initialized_at()
+    assert first is not None
+    # reconnecting must not rewrite it — that is the whole point
+    await mailbox.close()
+    await mailbox.connect()
+    assert await mailbox.storage_initialized_at() == first
+
+
+async def test_list_threads_shows_what_i_sent(mailbox: Mailbox) -> None:
+    project = _project()
+    sent = Message(
+        from_=f"{project}/alice", to=f"{project}/bob", subject="q", body="question?"
+    )
+    await mailbox.send(sent)
+
+    # the SENDER can see it — check_inbox never showed them this
+    threads = await mailbox.list_threads(project, "alice")
+    assert len(threads) == 1
+    t = threads[0]
+    assert t.counterparts == [f"{project}/bob"]
+    assert t.turns == 1
+    assert t.awaiting_them is True  # unread by bob
+
+    # once bob reads it, the sender can tell
+    await mailbox.read(project, "bob", sent.id)
+    assert (await mailbox.list_threads(project, "alice"))[0].awaiting_them is False
+
+
+async def test_read_thread_shows_read_state_and_is_party_restricted(
+    mailbox: Mailbox,
+) -> None:
+    project = _project()
+    first = Message(
+        from_=f"{project}/alice", to=f"{project}/bob", subject="s", body="one"
+    )
+    await mailbox.send(first)
+
+    turns = await mailbox.read_thread(project, "alice", first.thread or first.id)
+    assert turns is not None and len(turns) == 1
+    assert turns[0].mine is True
+    assert turns[0].read_at is None  # not yet consumed
+
+    # reading a thread must not consume it
+    assert any(m.id == first.id for m in await mailbox.peek(project, "bob"))
+
+    # a stranger on another project cannot read it
+    assert (
+        await mailbox.read_thread("other-proj", "eve", first.thread or first.id) is None
+    )
+    assert await mailbox.read_thread(project, "alice", "no-such-thread") is None
+
+
+async def test_stale_entries_hidden_and_supersede_protects_the_living(
+    mailbox: Mailbox, tmp_path: Path
+) -> None:
+    project = _project()
+    await mailbox.register(project, "live", AgentProfile())
+
+    # a live agent is listed, and cannot be superseded by someone else
+    assert any(a.agent == "live" for a in await mailbox.list_agents(project))
+    assert await mailbox.supersede(f"{project}/other", [f"{project}/live"]) == []
+    assert any(a.agent == "live" for a in await mailbox.list_agents(project))
+
+    # force an entry to look long-abandoned
+    old = (datetime.now(tz=UTC) - timedelta(days=99)).isoformat()
+    await mailbox._conn.execute(
+        "UPDATE agents SET last_seen = ? WHERE project = ? AND agent = ?",
+        (old, project, "live"),
+    )
+    await mailbox._conn.commit()
+
+    assert not any(a.agent == "live" for a in await mailbox.list_agents(project))
+    assert any(
+        a.agent == "live"
+        for a in await mailbox.list_agents(project, include_stale=True)
+    )
+    # now it can be tombstoned
+    assert await mailbox.supersede(f"{project}/other", [f"{project}/live"]) == [
+        f"{project}/live"
+    ]
+    assert await mailbox.whois(project, "live") is None

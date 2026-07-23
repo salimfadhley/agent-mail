@@ -66,6 +66,15 @@ CREATE TABLE IF NOT EXISTS agents (
     PRIMARY KEY (project, agent)
 );
 CREATE INDEX IF NOT EXISTS idx_agents_last_seen ON agents (last_seen);
+
+-- Hub-level facts. `initialized_at` is stamped once, when this storage is first
+-- created, and never rewritten: it lets a rejoining agent tell a *reset* directory
+-- from a genuinely new one (they are otherwise indistinguishable, and the failure
+-- is silent — agents re-derive addresses against an empty room).
+CREATE TABLE IF NOT EXISTS hub_meta (
+    key         TEXT PRIMARY KEY,
+    value       TEXT NOT NULL
+);
 """
 
 
@@ -79,6 +88,28 @@ class MailboxStats:
     agents_online: int
     per_day: list[tuple[str, int]] = field(default_factory=list)
     recent: list[Message] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class ThreadTurn:
+    """One message in a thread, with the read-state its *sender* is entitled to see."""
+
+    message: Message
+    read_at: str | None  # when the recipient consumed it; None = still unread
+    mine: bool  # did the calling agent send this turn?
+
+
+@dataclass(frozen=True)
+class ThreadSummary:
+    """A thread the calling agent is party to."""
+
+    thread: str
+    subject: str | None
+    counterparts: list[str]  # the other addresses on the thread
+    turns: int
+    last_at: str
+    last_from: str
+    awaiting_them: bool  # my latest turn is still unread by the other side
 
 
 @dataclass(frozen=True)
@@ -150,6 +181,12 @@ class Mailbox:
         await self._db.execute("PRAGMA journal_mode=WAL")
         await self._db.execute("PRAGMA busy_timeout=5000")
         await self._db.executescript(_SCHEMA)
+        # Stamp when this storage was created. INSERT OR IGNORE means an existing
+        # store keeps its original timestamp — only a fresh file gets a new one.
+        await self._db.execute(
+            "INSERT OR IGNORE INTO hub_meta (key, value) VALUES ('initialized_at', ?)",
+            (_now_iso(),),
+        )
         await self._db.commit()
         await self._purge_expired()
 
@@ -245,18 +282,32 @@ class Mailbox:
     async def peek(self, project: str, agent: str) -> list[Message]:
         """Return unread messages for ``project/agent`` without consuming them."""
         reader = format_address(project, agent)
+        # Fan-out and claim-anywhere kinds skip their own sender — you should never
+        # receive your own broadcast. Direct is exempt: `ping` self-sends deliberately.
         cursor = await self._conn.execute(
             "SELECT * FROM messages "
             "WHERE acked_at IS NULL AND ("
             "  (kind = 'direct' AND to_project = ? AND to_agent = ?)"
-            "  OR (kind = 'any' AND to_project = ?)"
-            "  OR (kind = 'global_any')"
-            "  OR (kind = 'broadcast' AND to_project = ? AND id NOT IN ("
+            "  OR (kind = 'any' AND to_project = ? AND from_addr != ?)"
+            "  OR (kind = 'global_any' AND from_addr != ?)"
+            "  OR (kind = 'broadcast' AND to_project = ? AND from_addr != ?"
+            "      AND id NOT IN ("
             "        SELECT message_id FROM broadcast_reads WHERE reader = ?))"
-            "  OR (kind = 'public' AND id NOT IN ("
+            "  OR (kind = 'public' AND from_addr != ? AND id NOT IN ("
             "        SELECT message_id FROM broadcast_reads WHERE reader = ?))"
             ") ORDER BY created ASC",
-            (project, agent, project, project, reader, reader),
+            (
+                project,
+                agent,
+                project,
+                reader,
+                reader,
+                project,
+                reader,
+                reader,
+                reader,
+                reader,
+            ),
         )
         rows = await cursor.fetchall()
         return [_row_to_message(row) for row in rows]
@@ -383,6 +434,42 @@ class Mailbox:
         assert info is not None  # just inserted
         return info
 
+    async def retire(self, project: str, agent: str) -> bool:
+        """Remove a directory entry. Returns whether one was actually removed.
+
+        Used to tombstone a **superseded identity** — e.g. after re-deriving your
+        address you retire the old one so the room isn't full of your ghosts.
+        """
+        cursor = await self._conn.execute(
+            "DELETE FROM agents WHERE project = ? AND agent = ?", (project, agent)
+        )
+        await self._conn.commit()
+        return cursor.rowcount > 0
+
+    async def supersede(self, caller: str, addresses: list[str]) -> list[str]:
+        """Retire former identities on the caller's behalf; returns those removed.
+
+        Guard rail: since there is no authentication, an entry may only be retired if
+        it is **stale** (long inactive). That lets an agent clean up its own dead
+        identities while making it impossible to evict a live agent from the directory.
+        """
+        removed: list[str] = []
+        for address in addresses:
+            kind, project, agent = parse_target(address)
+            if kind != "direct" or project is None or agent is None:
+                continue
+            if address == caller:  # never retire the identity you are using
+                continue
+            info = await self.whois(project, agent)
+            if info is None or not info.stale:
+                logger.info(
+                    "refusing to supersede %s (absent or still active)", address
+                )
+                continue
+            if await self.retire(project, agent):
+                removed.append(address)
+        return removed
+
     async def update_status(self, project: str, agent: str, status: str) -> AgentInfo:
         """Update just the ``status`` of an agent's profile (creates it if absent)."""
         current = await self.whois(project, agent)
@@ -393,8 +480,10 @@ class Mailbox:
 
     def _row_to_agent_info(self, row: aiosqlite.Row) -> AgentInfo:
         last_seen = datetime.fromisoformat(row["last_seen"])
-        online = datetime.now(tz=UTC) - last_seen <= timedelta(
-            seconds=self._config.online_seconds
+        idle = datetime.now(tz=UTC) - last_seen
+        online = idle <= timedelta(seconds=self._config.online_seconds)
+        stale = self._config.stale_days > 0 and idle > timedelta(
+            days=self._config.stale_days
         )
         return AgentInfo(
             project=row["project"],
@@ -403,11 +492,31 @@ class Mailbox:
             first_seen=datetime.fromisoformat(row["first_seen"]),
             last_seen=last_seen,
             online=online,
+            stale=stale,
             profile=AgentProfile.model_validate_json(row["profile"] or "{}"),
         )
 
-    async def list_agents(self, project: str | None = None) -> list[AgentInfo]:
-        """List directory entries (optionally one project), newest-active first."""
+    async def storage_initialized_at(self) -> str | None:
+        """When this hub's storage was created (ISO-8601), or ``None`` if unknown.
+
+        A rejoining agent compares this against when it last registered: if the store
+        is newer, the directory was **reset** and remembered addresses may be stale.
+        """
+        cursor = await self._conn.execute(
+            "SELECT value FROM hub_meta WHERE key = 'initialized_at'"
+        )
+        row = await cursor.fetchone()
+        return row["value"] if row else None
+
+    async def list_agents(
+        self, project: str | None = None, include_stale: bool = False
+    ) -> list[AgentInfo]:
+        """List directory entries (optionally one project), newest-active first.
+
+        By default entries unseen for ``stale_days`` are hidden: dead identities are
+        exactly the ones with the emptiest profiles, so they make the room look worse
+        than it is to a newcomer. Pass ``include_stale=True`` to see everything.
+        """
         if project is not None:
             cursor = await self._conn.execute(
                 "SELECT * FROM agents WHERE project = ? ORDER BY last_seen DESC",
@@ -418,7 +527,10 @@ class Mailbox:
                 "SELECT * FROM agents ORDER BY last_seen DESC"
             )
         rows = await cursor.fetchall()
-        return [self._row_to_agent_info(row) for row in rows]
+        agents = [self._row_to_agent_info(row) for row in rows]
+        if include_stale:
+            return agents
+        return [a for a in agents if not a.stale]
 
     async def whois(self, project: str, agent: str) -> AgentInfo | None:
         """Return one agent's directory entry, or ``None`` if never registered."""
@@ -518,6 +630,103 @@ class Mailbox:
         cursor = await self._conn.execute(sql, params)
         row = await cursor.fetchone()
         return int(row[0]) if row else 0
+
+    # -- threads (what have I sent? did they read it?) ---------------------
+
+    def _party_clause(self) -> str:
+        """SQL matching every message the caller is party to (sent or addressed to)."""
+        return (
+            "(from_addr = :me"
+            " OR (kind = 'direct' AND to_project = :proj AND to_agent = :agent)"
+            " OR (kind IN ('any','broadcast') AND to_project = :proj)"
+            " OR kind IN ('public','global_any'))"
+        )
+
+    async def _party_params(self, project: str, agent: str) -> dict[str, str]:
+        return {
+            "me": format_address(project, agent),
+            "proj": project,
+            "agent": agent,
+        }
+
+    async def list_threads(
+        self, project: str, agent: str, limit: int = 50
+    ) -> list[ThreadSummary]:
+        """Threads this agent is party to — **including ones it started**.
+
+        ``check_inbox`` only shows unread mail *to* you; this shows what you have sent
+        and whether it went anywhere, so a coordinator need not keep its working memory
+        in a local file.
+        """
+        me = format_address(project, agent)
+        params = await self._party_params(project, agent)
+        cursor = await self._conn.execute(
+            f"SELECT * FROM messages WHERE {self._party_clause()} ORDER BY created ASC",
+            params,
+        )
+        rows = await cursor.fetchall()
+        by_thread: dict[str, list[aiosqlite.Row]] = {}
+        for row in rows:
+            by_thread.setdefault(row["thread"] or row["id"], []).append(row)
+
+        summaries: list[ThreadSummary] = []
+        for thread_id, turns in by_thread.items():
+            last = turns[-1]
+            others: list[str] = []
+            for r in turns:
+                for addr in (r["from_addr"], r["to_addr"]):
+                    if addr != me and addr not in others:
+                        others.append(addr)
+            # "awaiting them" = the last word is mine and they haven't consumed it
+            awaiting = last["from_addr"] == me and last["acked_at"] is None
+            subject = next((r["subject"] for r in turns if r["subject"]), None)
+            summaries.append(
+                ThreadSummary(
+                    thread=thread_id,
+                    subject=subject,
+                    counterparts=others,
+                    turns=len(turns),
+                    last_at=last["created"],
+                    last_from=last["from_addr"],
+                    awaiting_them=awaiting,
+                )
+            )
+        summaries.sort(key=lambda s: s.last_at, reverse=True)
+        return summaries[:limit]
+
+    async def read_thread(
+        self, project: str, agent: str, thread_id: str
+    ) -> list[ThreadTurn] | None:
+        """Every turn on a thread, in order, with read-state. Read-only — never acks.
+
+        Returns ``None`` if the thread doesn't exist **or the caller isn't party to
+        it** (the two are deliberately indistinguishable from outside).
+        """
+        me = format_address(project, agent)
+        params = await self._party_params(project, agent)
+        params["thread"] = thread_id
+        cursor = await self._conn.execute(
+            "SELECT * FROM messages WHERE thread = :thread ORDER BY created ASC",
+            {"thread": thread_id},
+        )
+        rows = await cursor.fetchall()
+        if not rows:
+            return None
+        check = await self._conn.execute(
+            f"SELECT 1 FROM messages WHERE thread = :thread AND {self._party_clause()} "
+            f"LIMIT 1",
+            params,
+        )
+        if await check.fetchone() is None:
+            return None  # not your thread
+        return [
+            ThreadTurn(
+                message=_row_to_message(row),
+                read_at=row["acked_at"],
+                mine=row["from_addr"] == me,
+            )
+            for row in rows
+        ]
 
     async def flow_graph(self, since: str | None = None) -> FlowGraph:
         """Directed agent→agent message flow over a window (read-only).

@@ -38,6 +38,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_MAX_MESSAGE_BYTES = 1_048_576  # 1 MiB
 DEFAULT_TTL_DAYS = 14
 DEFAULT_ONLINE_SECONDS = 300  # an agent is "online" if seen within this window
+DEFAULT_STALE_DAYS = 7  # a directory entry unseen this long is hidden by default
 
 _BAKED_DEFAULTS = Path(__file__).parent / "defaults.toml"
 _VALID_TOKEN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
@@ -168,6 +169,13 @@ class Config(BaseSettings):
     online_seconds: int = Field(
         default=DEFAULT_ONLINE_SECONDS,
         validation_alias=_alias("online_seconds", "AGENT_MAIL_ONLINE_SECONDS"),
+    )
+    # A directory entry unseen for this long is "stale" and hidden from list_agents
+    # by default (dead identities have the emptiest cards and clutter the room).
+    # 0 disables staleness entirely.
+    stale_days: int = Field(
+        default=DEFAULT_STALE_DAYS,
+        validation_alias=_alias("stale_days", "AGENT_MAIL_STALE_DAYS"),
     )
 
     # -- identity (two-part: project + agent) -----------------------------
@@ -373,5 +381,7 @@ def hub_descriptor(
             "update_status",
             "list_agents",
             "whois",
+            "list_threads",
+            "read_thread",
         ],
     }

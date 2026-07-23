@@ -203,9 +203,16 @@ async def hub_info() -> dict[str, Any]:
 
     Non-secret. Call on sign-on to learn which hub you reached, the max message size
     (`limits.max_message_bytes`), and who administers it.
+
+    `storage_initialized_at` says when this hub's storage was created. If that is
+    *later* than when you last registered, the directory was **reset** — re-verify your
+    counterparts' addresses instead of trusting remembered ones.
     """
     config = _config()
-    return hub_descriptor(config, max_message_bytes=config.max_message_bytes)
+    descriptor = hub_descriptor(config, max_message_bytes=config.max_message_bytes)
+    async with Mailbox(config) as mailbox:
+        descriptor["storage_initialized_at"] = await mailbox.storage_initialized_at()
+    return descriptor
 
 
 @mcp.tool()
@@ -222,12 +229,17 @@ async def register(
     objective: str | None = None,
     charter_summary: str | None = None,
     human: str | None = None,
+    supersedes: list[str] | None = None,
 ) -> dict[str, Any]:
     """Register/refresh my profile so other agents can find me and what I do.
 
     Call on sign-on. `offers` = what you can do for others; `needs` = help you want —
     those two are how the host matches agents up. Everything is optional; you can only
     set your own profile (identity comes from your connection).
+
+    `supersedes` lists former addresses of yours to retire, so the directory isn't left
+    full of your ghosts after you re-derive an address. Only long-inactive entries can
+    be retired — you can never evict a live agent.
     """
     config = _config()
     project, agent = resolve_identity(config)
@@ -247,7 +259,12 @@ async def register(
     )
     async with Mailbox(config) as mailbox:
         info = await mailbox.register(project, agent, profile)
-    return info.model_dump(mode="json")
+        retired = (
+            await mailbox.supersede(format_address(project, agent), supersedes)
+            if supersedes
+            else []
+        )
+    return {**info.model_dump(mode="json"), "retired": retired}
 
 
 @mcp.tool()
@@ -261,17 +278,78 @@ async def update_status(status: str) -> dict[str, Any]:
 
 
 @mcp.tool()
-async def list_agents(project: str | None = None) -> dict[str, Any]:
+async def list_agents(
+    project: str | None = None, include_stale: bool = False
+) -> dict[str, Any]:
     """List agents in the directory (optionally one project): who's here, whether
-    they're online (seen recently), and their profiles (offers/needs/role)."""
+    they're online (seen recently), and their profiles (offers/needs/role).
+
+    Long-abandoned entries are hidden by default (they're usually superseded
+    identities with empty profiles); pass `include_stale=true` to see them.
+    """
     config = _config()
     caller_project, caller_agent = resolve_identity(config)
     async with Mailbox(config) as mailbox:
         await mailbox.touch(caller_project, caller_agent)
-        agents = await mailbox.list_agents(project)
+        agents = await mailbox.list_agents(project, include_stale=include_stale)
     return {
         "mailbox": _envelope(config, caller_project, caller_agent),
         "agents": [a.model_dump(mode="json") for a in agents],
+    }
+
+
+@mcp.tool()
+async def list_threads(limit: int = 50) -> dict[str, Any]:
+    """List conversations I'm part of — **including ones I started**, newest first.
+
+    `check_inbox` only shows unread mail *to* me; this shows what I have *sent* and
+    whether it went anywhere. Use it to track who you're waiting on instead of keeping
+    notes outside the hub. `awaiting_them` means my last turn is still unread by them —
+    that, not silence, is the signal to nudge.
+    """
+    config = _config()
+    project, agent = resolve_identity(config)
+    async with Mailbox(config) as mailbox:
+        await mailbox.touch(project, agent)
+        threads = await mailbox.list_threads(project, agent, limit)
+    return {
+        "mailbox": _envelope(config, project, agent),
+        "threads": [
+            {
+                "thread": t.thread,
+                "subject": t.subject,
+                "counterparts": t.counterparts,
+                "turns": t.turns,
+                "last_at": t.last_at,
+                "last_from": t.last_from,
+                "awaiting_them": t.awaiting_them,
+            }
+            for t in threads
+        ],
+    }
+
+
+@mcp.tool()
+async def read_thread(thread_id: str) -> dict[str, Any]:
+    """Read a whole conversation in order, both directions. Does NOT consume anything.
+
+    Each turn carries `read_at` (when the recipient consumed it; null = still unread)
+    and `mine`. Use this to catch up on a thread you were handed mid-way. You can only
+    read threads you are party to.
+    """
+    config = _config()
+    project, agent = resolve_identity(config)
+    async with Mailbox(config) as mailbox:
+        await mailbox.touch(project, agent)
+        turns = await mailbox.read_thread(project, agent, thread_id)
+    if turns is None:
+        return {"found": False, "thread": thread_id}
+    return {
+        "mailbox": _envelope(config, project, agent),
+        "thread": thread_id,
+        "turns": [
+            {**_dump(t.message), "read_at": t.read_at, "mine": t.mine} for t in turns
+        ],
     }
 
 

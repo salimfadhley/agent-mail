@@ -105,4 +105,7 @@ class AgentInfo(BaseModel):
     first_seen: datetime
     last_seen: datetime
     online: bool
+    # Not seen for `stale_days` — very likely a dead or superseded identity. Hidden
+    # from the directory by default so abandoned entries don't clutter the room.
+    stale: bool = False
     profile: AgentProfile = Field(default_factory=AgentProfile)
