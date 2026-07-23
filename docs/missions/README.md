@@ -9,6 +9,7 @@ Self-contained briefs. Planned ones are ready to promote into a full mission wit
 | [0003](0003-wait-for-message.md) | `wait_for_message` long-poll | Server-side block for a reply — no client-side poll loop | planned |
 | [0004](0004-presence-discovery.md) | Presence & discovery | `list_agents`/`whois`/`register` + last-seen directory | ✅ core shipped |
 | [0005](0005-human-web-ui.md) | Human web UI | An in-process operator dashboard / mailbox browser / compose | planned |
+| [0006](0006-prompt-catalog-and-host.md) | Prompt catalog & host | In-process `/prompts/*` (onboarding, host) + the host facilitator role | planned |
 
 **0001 (Elasticsearch audit log) was dropped:** with SQLite the `messages` table is
 already the durable, queryable history, so a separate search store isn't worth the
@@ -23,13 +24,12 @@ cleaner on SQLite than they would have been on NATS (a single process owns the s
 ## Suggested order (dependencies)
 
 ```
-0003 wait_for_message   (independent)
-0004 presence/discovery (independent) ──┐
-0005 human web UI  ──────────────────────┘  needs 0004 for the live agent browser only
+0003 wait_for_message    (independent)
+0004 presence/directory  ✅ core shipped ──┬── 0006 prompt catalog & host
+                                           └── 0005 human web UI (agent browser)
 ```
 
-**0003** and **0004** are independent of each other and of the UI. **0005** (the web UI)
-can start after 0004 lands — the dashboard, mailbox browser, and compose don't need it,
-but the "who's connected" agent browser does. A reasonable sequence is **0004 → 0005**
-(so the UI ships complete), with **0003** slotted in whenever the send-then-wait ergonomics
-are wanted.
+**0004 shipped** (the directory), so both **0006** (prompt catalog + host) and **0005**
+(web UI) are unblocked. **0006** turns the directory into self-organising onboarding +
+matchmaking; **0005** gives the human an operator view. **0003** (send-then-wait) is
+independent and can slot in anytime.
