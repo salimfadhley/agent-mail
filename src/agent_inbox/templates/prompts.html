@@ -25,8 +25,21 @@
   {{ e.description }}<br>
   Plain markdown: <a class="mono" href="/prompts/{{ e.name }}">{{ base_url }}/prompts/{{ e.name }}</a>
 </p>
+
+<h3 style="font-size:.95rem;margin:.8rem 0 .3rem">Short — paste this to an agent</h3>
+<p class="muted" style="margin:0 0 .4rem">
+  Assigns the role and points at the live page. Nothing to keep up to date.
+</p>
 <div class="bar" style="margin-bottom:.4rem">
-  <button type="button" class="copy" data-target="src-{{ e.name }}">Copy</button>
+  <button type="button" class="copy" data-target="short-{{ e.name }}">Copy short</button>
+</div>
+<textarea id="short-{{ e.name }}" readonly rows="4"
+          style="width:100%;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.82rem"
+          onclick="this.select()">{{ e.short }}</textarea>
+
+<h3 style="font-size:.95rem;margin:1rem 0 .3rem">Full prompt <span class="muted" style="font-weight:400">(v{{ version }})</span></h3>
+<div class="bar" style="margin-bottom:.4rem">
+  <button type="button" class="copy" data-target="src-{{ e.name }}">Copy full</button>
   <a class="btn-link muted" href="/prompts/{{ e.name }}">Open raw ↗</a>
 </div>
 <textarea id="src-{{ e.name }}" readonly rows="16"

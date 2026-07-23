@@ -113,3 +113,31 @@ def test_every_role_prompt_covers_the_four_setup_steps() -> None:
         assert "restart" in lowered, name
         # (d) persist name/role locally so it survives the session
         assert "claude.md" in lowered and "agents.md" in lowered, name
+
+
+def test_short_prompt_is_a_one_paste_bootstrap() -> None:
+    """The short form assigns the role and defers to the live page for everything else."""
+    config = _config()
+    for name in ("agent", "host", "admin"):
+        short = prompts.render_short(name, config)
+        assert short is not None
+        assert name in short
+        assert f"http://halob:8080/prompts/{name}" in short
+        # short enough to paste into a chat window
+        assert len(short) < 500, name
+    assert prompts.render_short("nope", config) is None
+    # the retired name still bootstraps, pointing at the canonical page
+    assert "prompts/agent" in (prompts.render_short("onboarding", config) or "")
+
+
+def test_full_prompt_carries_a_version_stamp_and_reread_pointer() -> None:
+    """It says which version it is and where to get a newer one."""
+    config = _config()
+    version = prompts.hub_version()
+    for name in ("agent", "host", "admin"):
+        body = prompts.render_prompt(name, config)
+        assert body is not None
+        assert "Staying current" in body, name
+        assert f"v{version}" in body, name
+        assert f"http://halob:8080/prompts/{name}" in body, name
+        assert "changes often" in body, name

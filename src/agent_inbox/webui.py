@@ -311,19 +311,26 @@ class WebConsole:
 
     async def _prompts(self, send: Send) -> None:
         """The prompt catalog, for humans: read it, and copy it out in one click."""
-        from agent_inbox.prompts import list_prompts, render_prompt
+        from agent_inbox.prompts import list_prompts, render_prompt, render_short
 
         entries = []
         for meta in list_prompts():
             body = render_prompt(meta["name"], self._config)
             if body is None:  # pragma: no cover - listed implies renderable
                 continue
-            entries.append({**meta, "body": body})
+            entries.append(
+                {
+                    **meta,
+                    "body": body,
+                    "short": render_short(meta["name"], self._config),
+                }
+            )
         await self._render(
             send,
             "prompts.html",
             entries=entries,
             base_url=self._config.base_url(),
+            version=hub_version(),
         )
 
     async def _static(self, send: Send, name: str) -> None:

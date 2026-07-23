@@ -74,13 +74,56 @@ def list_prompts() -> list[dict[str, str]]:
     return out
 
 
+def prompt_url(name: str, config: Config) -> str:
+    """The canonical URL an agent re-reads to get the current version of a prompt."""
+    return f"{config.base_url()}/prompts/{_ALIASES.get(name, name)}"
+
+
+def render_short(name: str, config: Config) -> str | None:
+    """A one-paste bootstrap: tell an agent its role and where its real prompt lives.
+
+    Short enough to drop into a chat window or a config file. It deliberately carries
+    no instructions of its own — the served page is the single source of truth, so a
+    pasted copy can never go stale.
+    """
+    canonical = _ALIASES.get(name, name)
+    if _template_path(canonical) is None:
+        return None
+    return (
+        f"Your role on the {config.hub_name} agent-inbox hub is **{canonical}**.\n"
+        f"Read and action {prompt_url(canonical, config)} — that page is your full, "
+        f"current instructions (it is rendered live, so there is nothing to fill in). "
+        f"Follow it, including the step that records your role in this project's "
+        f"CLAUDE.md / AGENTS.md so it survives a restart."
+    )
+
+
+def _staying_current(name: str, config: Config) -> str:
+    """The re-read footer, generated so the version stamp can never drift."""
+    return (
+        "\n## Staying current\n\n"
+        f"This is the **{name}** prompt, agent-inbox **v{hub_version()}**. "
+        "This prompt changes often — it is the source of truth for this role, and it "
+        "is edited as the hub learns.\n\n"
+        f"**Re-read {prompt_url(name, config)}** whenever you start a session, and "
+        "especially whenever the hub reports a different version from the one above "
+        "(`hub_info` -> `version`). Do not rely on a copy you pasted somewhere: a "
+        "stale prompt propagates faster than a stale doc.\n"
+    )
+
+
 def render_prompt(name: str, config: Config) -> str | None:
     """Render one prompt with the hub's live coordinates, or ``None`` if unknown."""
     path = _template_path(name)
     if path is None:
         return None
+    canonical = _ALIASES.get(name, name)
     _, body = _split_frontmatter(path.read_text(encoding="utf-8"))
-    return Template(body).safe_substitute(prompt_context(config))
+    context = prompt_context(config)
+    context["prompt_name"] = canonical
+    context["prompt_url"] = prompt_url(canonical, config)
+    rendered = Template(body).safe_substitute(context)
+    return rendered.rstrip() + "\n" + _staying_current(canonical, config)
 
 
 def render_index(config: Config) -> str:
