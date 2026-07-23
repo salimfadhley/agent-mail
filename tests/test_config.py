@@ -134,8 +134,10 @@ def test_hub_descriptor_is_public() -> None:
     config = Config().model_copy(
         update={"hub": "h", "transport": "http", "admin_agent": "admin"}
     )
-    descriptor = hub_descriptor(config)
+    descriptor = hub_descriptor(config, max_message_bytes=1048576)
     assert descriptor["hub"] == "h"
     assert descriptor["admin_agent"] == "admin"
     assert "<project>/<agent>" in str(descriptor["connect_url_template"])
     assert "ping" in descriptor["tools"]  # type: ignore[operator]
+    assert descriptor["limits"] == {"max_message_bytes": 1048576}
+    assert descriptor["version"]

@@ -23,7 +23,7 @@ from typing import Any
 import nats
 from nats.aio.client import Client as NatsClient
 from nats.aio.msg import Msg
-from nats.errors import NoServersError
+from nats.errors import MaxPayloadError, NoServersError
 from nats.errors import TimeoutError as NatsTimeoutError
 from nats.js import JetStreamContext
 from nats.js.api import AckPolicy, ConsumerConfig, StreamConfig
@@ -215,10 +215,27 @@ class Mailbox:
 
     # -- verbs -------------------------------------------------------------
 
+    async def max_message_size(self) -> int:
+        """Effective max bytes for one message (server payload cap, or a smaller
+        stream limit if set)."""
+        server_max = self._conn.max_payload
+        info = await self._stream.stream_info(STREAM_NAME)
+        stream_max = info.config.max_msg_size or 0
+        if stream_max > 0:
+            return min(server_max, stream_max)
+        return server_max
+
     async def send(self, message: Message) -> Message:
         """Publish ``message`` to the subject resolved from its ``to`` address."""
         _, subject = parse_target(message.to)
-        await self._stream.publish(subject, message.to_json_bytes())
+        payload = message.to_json_bytes()
+        try:
+            await self._stream.publish(subject, payload)
+        except MaxPayloadError as exc:
+            raise MailboxError(
+                f"message too large: {len(payload)} bytes exceeds the hub's max of "
+                f"{self._conn.max_payload} bytes (see hub_info -> limits)"
+            ) from exc
         logger.debug("sent %s -> %s (%s)", message.from_, message.to, message.id)
         return message
 

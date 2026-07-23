@@ -333,10 +333,14 @@ def doctor(ctx: click.Context) -> None:
 @cli.command(name="hub-info")
 @click.pass_context
 def hub_info_cmd(ctx: click.Context) -> None:
-    """Show this hub's public self-description (name, connect URL, admin/feedback)."""
+    """Show this hub's public self-description (name, limits, connect URL, admin)."""
     config: Config = ctx.obj["config"]
     as_json: bool = ctx.obj["as_json"]
-    descriptor = hub_descriptor(config)
+    try:
+        max_size = _run(_with_mailbox(config, lambda mb: mb.max_message_size()))
+    except Exception:  # process boundary: still show the static descriptor
+        max_size = None
+    descriptor = hub_descriptor(config, max_message_bytes=max_size)
     if as_json:
         click.echo(json.dumps(descriptor, indent=2, sort_keys=True))
     else:

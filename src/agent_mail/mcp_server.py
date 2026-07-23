@@ -5,12 +5,12 @@ uses — so there is no logic duplication.
 
 Two ways to run it:
 
-* **stdio** (local, single agent): identity comes from ``AGENT_ID``. This is how a
-  Claude/Codex client spawns the server as a subprocess.
+* **stdio** (local, single agent): identity comes from ``AGENT_MAIL_PROJECT`` +
+  ``AGENT_ID``. This is how a Claude/Codex client spawns the server as a subprocess.
 * **http** (hosted, multi-agent): one server serves many agents. Each agent connects
-  on its own address — ``http://<host>:<port>/<agent>/mcp`` — and the path names the
-  caller. That URL is the agent's entire configuration. ``?agent=`` and an
-  ``X-Agent-Id`` header are accepted as alternatives.
+  on its own address — ``http://<host>:<port>/<project>/<agent>/mcp`` — and the path
+  names the caller. That URL is the agent's entire configuration.
+  ``?project=&agent=`` and ``X-Agent-Project`` + ``X-Agent-Id`` headers also work.
 """
 
 from __future__ import annotations
@@ -143,11 +143,24 @@ async def ping() -> dict[str, Any]:
 
 @mcp.tool()
 async def hub_info() -> dict[str, Any]:
-    """Describe this agent-mail hub: its name, how to connect, and how to get help.
+    """Describe this agent-mail hub: name, version, addressing, limits, and contacts.
 
-    Non-secret. Call on sign-on to learn which hub you reached and who administers it.
+    Non-secret. Call on sign-on to learn which hub you reached, the max message size
+    (`limits.max_message_bytes`), and who administers it.
     """
-    return hub_descriptor(_config())
+    config = _config()
+    max_size = await _probe_max_message_size(config)
+    return hub_descriptor(config, max_message_bytes=max_size)
+
+
+async def _probe_max_message_size(config: Config) -> int | None:
+    """Best-effort query of the hub's max message size; None if NATS is unreachable."""
+    try:
+        async with Mailbox(config) as mailbox:
+            return await mailbox.max_message_size()
+    except Exception:  # discovery must not hard-fail if NATS is momentarily down
+        logger.warning("could not determine max message size", exc_info=True)
+        return None
 
 
 # -- HTTP multi-tenant identity middleware --------------------------------------
@@ -223,10 +236,10 @@ class AgentIdentityMiddleware:
         await send({"type": "http.response.body", "body": body})
 
 
-def build_http_app(config: Config) -> ASGIApp:
+def build_http_app(config: Config, max_message_bytes: int | None = None) -> ASGIApp:
     """Build the multi-tenant ASGI app for the hosted MCP server."""
     mcp.settings.streamable_http_path = config.path
-    hub_json = json.dumps(hub_descriptor(config)).encode()
+    hub_json = json.dumps(hub_descriptor(config, max_message_bytes)).encode()
     return AgentIdentityMiddleware(mcp.streamable_http_app(), config.path, hub_json)
 
 
@@ -234,17 +247,23 @@ def serve(config: Config | None = None) -> None:
     """Run the MCP server over the configured transport."""
     config = config or _config()
     if config.transport == "http":
+        import asyncio
+
         import uvicorn
 
+        # Query the hub's max message size once so GET / can advertise it.
+        max_size = asyncio.run(_probe_max_message_size(config))
         logger.info(
-            "serving MCP over http on %s:%s (agents connect on /<agent>%s)",
+            "serving MCP over http on %s:%s (agents connect on /<project>/<agent>%s)",
             config.host,
             config.port,
             config.path,
         )
-        uvicorn.run(build_http_app(config), host=config.host, port=config.port)
+        uvicorn.run(
+            build_http_app(config, max_size), host=config.host, port=config.port
+        )
     else:
-        logger.info("serving MCP over stdio as agent %r", config.agent_id)
+        logger.info("serving MCP over stdio as %s/%s", config.project, config.agent_id)
         mcp.run()
 
 

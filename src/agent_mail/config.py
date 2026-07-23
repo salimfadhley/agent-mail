@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import logging
 import re
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _pkg_version
 from pathlib import Path
 
 from pydantic import AliasChoices, Field
@@ -269,8 +271,21 @@ class Config(BaseSettings):
         return data
 
 
-def hub_descriptor(config: Config) -> dict[str, object]:
-    """Return the hub's public, non-secret self-description for discovery."""
+def _hub_version() -> str:
+    try:
+        return _pkg_version("agent-mail")
+    except PackageNotFoundError:  # pragma: no cover - source checkout w/o metadata
+        return "0.0.0"
+
+
+def hub_descriptor(
+    config: Config, max_message_bytes: int | None = None
+) -> dict[str, object]:
+    """Return the hub's public, non-secret self-description for discovery.
+
+    ``max_message_bytes`` is the effective per-message size limit (queried from the
+    live NATS server); ``None`` if it could not be determined.
+    """
     base = config.base_url()
     connect = (
         f"{base}/<project>/<agent>{config.path}"
@@ -280,10 +295,14 @@ def hub_descriptor(config: Config) -> dict[str, object]:
     return {
         "hub": config.hub,
         "description": config.hub_description,
+        "version": _hub_version(),
         "addressing": {
             "direct": "project/agent",
             "any": "project (bare) — one agent on the project",
             "broadcast": "project/* — every agent on the project",
+        },
+        "limits": {
+            "max_message_bytes": max_message_bytes,
         },
         "connect_url_template": connect,
         "transport": config.transport,

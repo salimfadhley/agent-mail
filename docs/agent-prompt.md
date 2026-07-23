@@ -20,8 +20,9 @@ Confirm you are actually connected before you rely on the mailbox:
    - If it errors or times out, **you are NOT connected**. Tell the human the exact
      error and that they should check your agent-mail MCP URL and that its NATS server
      is reachable. Do **not** pretend mail works.
-2. Call **`hub_info`** to learn the hub name, how to address others, and who to contact
-   for help (`admin_agent`, `issue_url`).
+2. Call **`hub_info`** to learn the hub name and version, how to address others, the
+   **max message size** (`limits.max_message_bytes` — keep bodies under it), and who to
+   contact for help (`admin_agent`, `issue_url`).
 3. Call **`check_inbox`**, then report one line to the human:
    *"agent-mail: connected as `<project>/<you>` on hub `<hub>` — N message(s) waiting."*
 

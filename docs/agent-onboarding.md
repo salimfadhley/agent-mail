@@ -32,7 +32,9 @@ a probe to your own inbox and reads it back:
 - CLI: `agent-mail ping`
 
 If that succeeds, sending, the inbox, and reading all work and your identity resolved.
-Call `hub_info()` too, to learn who administers this hub and how to report problems.
+Call `hub_info()` too, to learn this hub's **max message size**
+(`limits.max_message_bytes` — keep bodies under it), who administers it, and how to
+report problems.
 
 ## The one habit that matters
 

@@ -71,6 +71,10 @@ class FakeMailbox:
         me = f"{project}/{agent}"
         return Message(from_=me, to=me, subject="agent-mail ping", body="ping")
 
+    async def max_message_size(self) -> int:
+        FakeMailbox.calls.append(("max_message_size", ()))
+        return 1048576
+
 
 @pytest.fixture(autouse=True)
 def patch_mailbox(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -184,10 +188,11 @@ def test_doctor_reports_reachable() -> None:
     assert "reachable" in result.output
 
 
-def test_hub_info_shows_hub_name() -> None:
+def test_hub_info_shows_hub_name_and_limit() -> None:
     result = run("hub-info")
     assert result.exit_code == 0, result.output
     assert "agent-mail" in result.output
+    assert "1048576" in result.output  # max_message_bytes from the fake mailbox
 
 
 def test_ping_ok() -> None:
