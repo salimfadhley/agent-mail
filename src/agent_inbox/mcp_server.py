@@ -402,6 +402,10 @@ class AgentIdentityMiddleware:
             rf"^/(?P<project>[^/]+)/(?P<agent>[^/]+){re.escape(self._mount)}"
             r"(?P<rest>/.*)?$"
         )
+        # GET /<project>/<agent>[/<role>]/unread
+        self._unread_pattern = re.compile(
+            r"^/(?P<project>[^/]+)/(?P<agent>[^/]+)(?:/(?P<role>[^/]+))?/unread/?$"
+        )
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope.get("type") != "http":
@@ -410,6 +414,12 @@ class AgentIdentityMiddleware:
         path = scope.get("path")
         if path == "/health":
             await self._json(send, b'{"status":"ok"}')
+            return
+        # A deliberately tiny "do I have mail?" probe: one indexed COUNT, no MCP
+        # session handshake. It runs on every beat of a recipient's loop, so it has
+        # to be far cheaper than opening a streamable-http session would be.
+        if path is not None and self._unread_pattern.match(path):
+            await self._unread(send, path)
             return
         # The human console owns /ui; a browser hitting / is sent there, while a
         # machine (no text/html Accept) still gets the JSON hub descriptor.
@@ -475,6 +485,24 @@ class AgentIdentityMiddleware:
         if project and agent:
             return project.decode(), agent.decode()
         return None
+
+    async def _unread(self, send: Send, path: str) -> None:
+        """Answer the cheap unread probe: ``{"unread": n, "from": [...]}``."""
+        match = self._unread_pattern.match(path)
+        if match is None or self._config is None:  # pragma: no cover - guarded above
+            await self._json(send, b'{"unread":0}')
+            return
+        try:
+            count, senders = 0, []
+            async with Mailbox(self._config) as mailbox:
+                count, senders = await mailbox.unread_count(
+                    match.group("project"), match.group("agent"), match.group("role")
+                )
+            body = json.dumps({"unread": count, "from": senders}).encode()
+        except Exception:  # a probe must never take the server down
+            logger.exception("unread probe failed for %s", path)
+            body = b'{"unread":0,"error":"probe failed"}'
+        await self._json(send, body)
 
     @staticmethod
     def _wants_html(scope: Scope) -> bool:

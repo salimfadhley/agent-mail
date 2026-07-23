@@ -8,6 +8,7 @@ import logging
 import os
 import sys
 import time
+import urllib.request
 from collections.abc import Awaitable, Callable, Sequence
 from typing import NoReturn
 
@@ -536,6 +537,85 @@ def mcp_serve(
         updates["path"] = path_
     config = base.model_copy(update=updates) if updates else base
     serve(config)
+
+
+@cli.command("hook-check")
+@click.option(
+    "--url",
+    default=None,
+    envvar="AGENT_INBOX_HOOK_URL",
+    help="Hub URL for this agent. Accepts the same .../mcp URL you gave your MCP "
+    "client; the probe endpoint is derived from it. Omit to read a local database.",
+)
+@click.option(
+    "--event",
+    default="PostToolBatch",
+    help="Hook event name to echo back in the JSON (must match the event you "
+    "registered the hook on).",
+)
+@click.option("--timeout", default=2.0, help="Give up after this many seconds.")
+@click.pass_context
+def hook_check(ctx: click.Context, url: str | None, event: str, timeout: float) -> None:
+    """Emit a Claude Code hook payload if this agent has unread mail (else nothing).
+
+    Designed to run on every beat of an agent's loop, so it is deliberately dull:
+    one cheap count, no bodies, and it prints **only** well-formed hook JSON —
+    stray stdout would break Claude Code's parsing. It exits 0 whatever happens,
+    because a mail check must never be able to stall the agent it serves.
+    """
+    message: str | None = None
+    try:
+        count, senders = _unread_snapshot(ctx, url, timeout)
+        if count:
+            who = ", ".join(sorted(set(senders))[:3]) or "another agent"
+            plural = "s" if count != 1 else ""
+            message = (
+                f"You have {count} unread agent-inbox message{plural} from {who}. "
+                "Call `check_inbox` to read them before continuing."
+            )
+    except Exception:  # never let a mail probe break the loop it runs inside
+        logger.debug("hook-check failed", exc_info=True)
+        message = None
+
+    if message:
+        click.echo(
+            json.dumps(
+                {
+                    "hookSpecificOutput": {
+                        "hookEventName": event,
+                        "additionalContext": message,
+                    }
+                }
+            )
+        )
+    ctx.exit(0)
+
+
+def _unread_snapshot(
+    ctx: click.Context, url: str | None, timeout: float
+) -> tuple[int, list[str]]:
+    """Return ``(unread_count, senders)`` from the hub over HTTP, or a local db.
+
+    Remote is the common case: a hosted agent's mail lives on the hub, and reading
+    some unrelated local SQLite file would silently report zero forever.
+    """
+    if url:
+        probe = url.rstrip("/")
+        if probe.endswith("/mcp"):
+            probe = probe[: -len("/mcp")]
+        probe = f"{probe}/unread"
+        with urllib.request.urlopen(probe, timeout=timeout) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        return int(payload.get("unread", 0)), list(payload.get("from", []))
+
+    config: Config = ctx.obj["config"]
+    project, agent = config.require_address()
+
+    async def _count() -> tuple[int, list[str]]:
+        async with Mailbox(config) as mailbox:
+            return await mailbox.unread_count(project, agent)
+
+    return _run(_count())
 
 
 def _setup_logging() -> None:

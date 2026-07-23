@@ -437,6 +437,27 @@ class Mailbox:
         rows = await cursor.fetchall()
         return [_row_to_message(row) for row in rows]
 
+    async def unread_count(
+        self, project: str, agent: str, role: str | None = None
+    ) -> tuple[int, list[str]]:
+        """How many messages are waiting, and who they're from. Cheap and read-only.
+
+        Intended for a "you have mail" poller that runs on every beat of an agent's
+        loop, so it must stay a single indexed COUNT — never load the bodies.
+        """
+        params = self._reader(project, agent, role)
+        cursor = await self._conn.execute(
+            "SELECT from_addr, COUNT(*) AS n FROM messages WHERE acked_at IS NULL"
+            f" AND {self._ROUTES_TO}"
+            f" AND {self._NOT_MY_OWN_FANOUT}"
+            " AND (kind = 'claim' OR id NOT IN ("
+            "     SELECT message_id FROM broadcast_reads WHERE reader = :me))"
+            " GROUP BY from_addr ORDER BY n DESC",
+            params,
+        )
+        rows = await cursor.fetchall()
+        return sum(r["n"] for r in rows), [r["from_addr"] for r in rows]
+
     async def read(
         self, project: str, agent: str, message_id: str, role: str | None = None
     ) -> Message:

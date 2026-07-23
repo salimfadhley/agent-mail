@@ -7,6 +7,7 @@ external services, just a temp-file SQLite db.
 
 from __future__ import annotations
 
+import json
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -332,3 +333,47 @@ async def test_browser_root_redirects_to_ui(env: tuple[Config, Mailbox]) -> None
     ui = await _asgi(mw, "GET", "/ui")
     assert ui["status"] == 200
     assert "dashboard" in ui["body"].lower()
+
+
+# -- the "you have mail" probe (mission: wake) --------------------------------
+
+
+async def test_unread_count_is_cheap_and_matches_peek(
+    env: tuple[Config, Mailbox],
+) -> None:
+    config, mb = env
+    p = _project()
+    await mb.send(Message(from_=f"{p}/alice", to=f"{p}/bob", subject="one", body="x"))
+    await mb.send(Message(from_=f"{p}/carol", to=f"{p}/bob", subject="two", body="x"))
+    # bob's own broadcast must not count against him
+    await mb.send(Message(from_=f"{p}/bob", to="all/all", subject="mine", body="x"))
+
+    count, senders = await mb.unread_count(p, "bob")
+    assert count == len(await mb.peek(p, "bob"))
+    assert count == 2
+    assert set(senders) == {f"{p}/alice", f"{p}/carol"}
+
+    # a bystander gets ONLY the public broadcast — never bob's direct mail. (And
+    # yes, they do get it: all/all reaches every agent everywhere, which is exactly
+    # why the etiquette note in the agent prompt exists.)
+    assert await mb.unread_count(p, "bystander") == (1, [f"{p}/bob"])
+
+
+async def test_unread_probe_endpoint(env: tuple[Config, Mailbox]) -> None:
+    """The probe answers without an MCP session — it runs on every tool batch."""
+    config, mb = env
+    p = _project()
+    await mb.send(Message(from_=f"{p}/alice", to=f"{p}/bob", subject="hi", body="x"))
+
+    async def noop(scope: Any, receive: Any, send: Any) -> None:  # pragma: no cover
+        return None
+
+    mw = AgentIdentityMiddleware(
+        app=noop, mount_path="/mcp", hub_json=b"{}", config=config
+    )
+    resp = await _asgi(mw, "GET", f"/{p}/bob/unread")
+    assert resp["status"] == 200
+    assert json.loads(resp["body"]) == {"unread": 1, "from": [f"{p}/alice"]}
+
+    empty = await _asgi(mw, "GET", f"/{p}/nobody/unread")
+    assert json.loads(empty["body"])["unread"] == 0
