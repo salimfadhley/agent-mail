@@ -33,16 +33,18 @@ jobs:
         with:
           fetch-depth: 0  # for git-describe version
 
-      - name: Compute a valid PEP 440 version
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Compute version (hatch-vcs — the same one PyPI gets)
         id: version
-        # On a v* tag use it (0.1.0); otherwise 0.0.0 — an untagged `git describe`
-        # returns a bare SHA, which is not a valid version and breaks hatch-vcs.
+        # A v* tag -> a clean release version (0.1.0); a commit on main -> an
+        # auto-incrementing dev version (0.1.1.dev1, .dev2, … = commits since the tag).
         run: |
-          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
-            echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-          else
-            echo "value=0.0.0" >> "$GITHUB_OUTPUT"
-          fi
+          VER=$(uvx --with hatch-vcs hatch version)
+          echo "pep440=$VER" >> "$GITHUB_OUTPUT"
+          # Docker tags may not contain '+'; keep the clean core (e.g. 0.1.1.dev3).
+          echo "docker=${VER%%+*}" >> "$GITHUB_OUTPUT"
 
       - name: Resolve target registries
         id: reg
@@ -74,9 +76,8 @@ jobs:
         with:
           images: ${{ steps.reg.outputs.images }}
           tags: |
+            type=raw,value=${{ steps.version.outputs.docker }}
             type=raw,value=latest,enable={{is_default_branch}}
-            type=sha,prefix=main-,enable={{is_default_branch}}
-            type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
 
       - name: Set up QEMU
@@ -92,7 +93,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           build-args: |
-            VERSION=${{ steps.version.outputs.value }}
+            VERSION=${{ steps.version.outputs.pep440 }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
