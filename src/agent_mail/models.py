@@ -66,3 +66,39 @@ class Message(BaseModel):
     def from_json_bytes(cls, data: bytes) -> Message:
         """Parse a message from JSON bytes."""
         return cls.model_validate_json(data)
+
+
+class AgentProfile(BaseModel):
+    """What an agent tells others about itself, for the directory and matchmaking.
+
+    Everything is optional — an agent can register with as little or as much as it
+    likes. ``offers`` (what it can do for others) and ``needs`` (what it wants help
+    with) are the pair the host matches on.
+    """
+
+    # allow a field literally named ``model`` (the agent's engine)
+    model_config = ConfigDict(protected_namespaces=())
+
+    model: str | None = None  # engine, e.g. claude-opus, openai-codex, gemini-2.5
+    status: str = "available"  # available | busy | away
+    offers: list[str] = Field(default_factory=list)  # capabilities for others
+    needs: list[str] = Field(default_factory=list)  # help this agent is looking for
+    working_dir: str | None = None  # working directory root
+    hostname: str | None = None  # machine it runs on
+    ide: str | None = None  # jetbrains | vscode | none
+    open_to_help: bool | None = None  # open to requests from other agents?
+    objective: str | None = None  # current objective
+    charter_summary: str | None = None  # one-line charter/purpose
+    human: str | None = None  # the human it works for
+
+
+class AgentInfo(BaseModel):
+    """A directory entry: an agent's identity, activity, and profile."""
+
+    project: str
+    agent: str
+    address: str
+    first_seen: datetime
+    last_seen: datetime
+    online: bool
+    profile: AgentProfile = Field(default_factory=AgentProfile)

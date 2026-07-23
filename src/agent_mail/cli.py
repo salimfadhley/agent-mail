@@ -13,11 +13,11 @@ from typing import NoReturn
 
 import click
 
-from agent_mail.config import Config, format_address, hub_descriptor
+from agent_mail.config import Config, format_address, hub_descriptor, parse_target
 from agent_mail.config_env import set_runtime_config_path
 from agent_mail.exceptions import ConfigError, MailboxError
 from agent_mail.mailbox import Mailbox
-from agent_mail.models import Intent, Message
+from agent_mail.models import AgentInfo, AgentProfile, Intent, Message
 
 logger = logging.getLogger(__name__)
 
@@ -348,6 +348,130 @@ def hub_info_cmd(ctx: click.Context) -> None:
     else:
         for key, value in descriptor.items():
             click.echo(f"{key}: {value}")
+
+
+def _print_agent_human(info: AgentInfo) -> None:
+    dot = "online" if info.online else "offline"
+    p = info.profile
+    click.echo(f"{info.address}  [{p.status}, {dot}]")
+    if p.model:
+        click.echo(f"  model:   {p.model}")
+    if p.charter_summary:
+        click.echo(f"  role:    {p.charter_summary}")
+    if p.offers:
+        click.echo(f"  offers:  {', '.join(p.offers)}")
+    if p.needs:
+        click.echo(f"  needs:   {', '.join(p.needs)}")
+    if p.objective:
+        click.echo(f"  doing:   {p.objective}")
+    click.echo(f"  last:    {info.last_seen.isoformat()}")
+
+
+@cli.command()
+@click.option("--project", "project_filter", default=None, help="Only this project.")
+@click.pass_context
+def agents(ctx: click.Context, project_filter: str | None) -> None:
+    """List agents in the directory: who's here, online, and what they do."""
+    config: Config = ctx.obj["config"]
+    as_json: bool = ctx.obj["as_json"]
+    try:
+        entries = _run(_with_mailbox(config, lambda mb: mb.list_agents(project_filter)))
+    except (ConfigError, MailboxError) as exc:
+        _fail(str(exc))
+
+    def human() -> None:
+        if not entries:
+            click.echo("no agents registered")
+            return
+        click.echo(f"{len(entries)} agent(s):")
+        for a in entries:
+            dot = "online " if a.online else "offline"
+            role = a.profile.charter_summary or ", ".join(a.profile.offers)
+            click.echo(f"  [{dot}] {a.address}  ({a.profile.status})  {role}")
+
+    _emit([a.model_dump(mode="json") for a in entries], as_json=as_json, human=human)
+
+
+@cli.command()
+@click.argument("address")
+@click.pass_context
+def whois(ctx: click.Context, address: str) -> None:
+    """Show one agent's directory card. ADDRESS is project/agent."""
+    config: Config = ctx.obj["config"]
+    as_json: bool = ctx.obj["as_json"]
+    try:
+        kind, project, agent = parse_target(address)
+        if kind != "direct" or project is None or agent is None:
+            _fail(f"whois needs a specific project/agent, got {address!r}")
+        info = _run(_with_mailbox(config, lambda mb: mb.whois(project, agent)))
+    except (ConfigError, MailboxError) as exc:
+        _fail(str(exc))
+    if info is None:
+        _emit(
+            {"found": False, "address": address},
+            as_json=as_json,
+            human=lambda: click.echo(f"{address}: not in the directory"),
+        )
+        return
+    _emit(
+        info.model_dump(mode="json"),
+        as_json=as_json,
+        human=lambda: _print_agent_human(info),
+    )
+
+
+@cli.command()
+@click.option("--model", default=None, help="Engine, e.g. claude-opus, openai-codex.")
+@click.option("--status", default="available", help="available | busy | away.")
+@click.option("--offers", default=None, help="Comma-separated capabilities.")
+@click.option("--needs", default=None, help="Comma-separated help wanted.")
+@click.option("--working-dir", "working_dir", default=None)
+@click.option("--hostname", default=None)
+@click.option("--ide", default=None, help="jetbrains | vscode | none.")
+@click.option("--objective", default=None, help="Current objective.")
+@click.option("--charter", "charter", default=None, help="One-line role/purpose.")
+@click.option("--human", default=None, help="The human you work for.")
+@click.pass_context
+def register(
+    ctx: click.Context,
+    model: str | None,
+    status: str,
+    offers: str | None,
+    needs: str | None,
+    working_dir: str | None,
+    hostname: str | None,
+    ide: str | None,
+    objective: str | None,
+    charter: str | None,
+    human: str | None,
+) -> None:
+    """Register/refresh my profile in the directory."""
+    config: Config = ctx.obj["config"]
+    as_json: bool = ctx.obj["as_json"]
+    profile = AgentProfile(
+        model=model,
+        status=status,
+        offers=[s.strip() for s in offers.split(",") if s.strip()] if offers else [],
+        needs=[s.strip() for s in needs.split(",") if s.strip()] if needs else [],
+        working_dir=working_dir,
+        hostname=hostname,
+        ide=ide,
+        objective=objective,
+        charter_summary=charter,
+        human=human,
+    )
+    try:
+        project, agent = config.require_address()
+        info = _run(
+            _with_mailbox(config, lambda mb: mb.register(project, agent, profile))
+        )
+    except (ConfigError, MailboxError) as exc:
+        _fail(str(exc))
+    _emit(
+        info.model_dump(mode="json"),
+        as_json=as_json,
+        human=lambda: click.echo(f"registered {info.address}"),
+    )
 
 
 @cli.command(name="mcp-serve")

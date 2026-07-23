@@ -96,6 +96,9 @@ Add `--json` to any command for machine-readable output.
 | `reply <id> --body` | Reply directly to the sender and ack the original |
 | `notify --to <target> [--thread]` | Validate the address (best-effort; a no-op — SQLite can't wake a process) |
 | `ping` | Round-trip a message to yourself to check the system is operational |
+| `register [--model --offers --needs --charter …]` | Register/refresh my profile in the directory |
+| `agents [--project P]` | List agents in the directory: who's here, online, and what they do |
+| `whois <project/agent>` | Show one agent's directory card |
 | `doctor` | Validate config + storage; print the db path, `storage: ✅ ready`, and the effective (redacted) config |
 | `hub-info` | Show this hub's public self-description (name, connect URL, admin/feedback) |
 | `mcp-serve` | Run the MCP server (see below) |

@@ -20,6 +20,9 @@ ttl_days = 14                          # env AGENT_MAIL_TTL_DAYS
 # Reject any single message larger than this many bytes (advertised via hub_info).
 max_message_bytes = 1048576            # env AGENT_MAIL_MAX_MESSAGE_BYTES  (1 MiB)
 
+# An agent shows as "online" in the directory if it was active within this window.
+online_seconds = 300                   # env AGENT_MAIL_ONLINE_SECONDS
+
 # --- Identity (two-part: project + agent) ---------------------------------
 # Addresses are <project>/<agent>. For the CLI and single-agent (stdio) servers,
 # set both. Leave unset for a hosted multi-agent http server (identity comes from

@@ -28,14 +28,20 @@ from urllib.parse import parse_qs
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
-from agent_mail.config import Config, format_address, hub_descriptor, hub_version
+from agent_mail.config import (
+    Config,
+    format_address,
+    hub_descriptor,
+    hub_version,
+    parse_target,
+)
 from agent_mail.identity import (
     reset_current_agent,
     resolve_identity,
     set_current_agent,
 )
 from agent_mail.mailbox import Mailbox
-from agent_mail.models import Intent, Message
+from agent_mail.models import AgentProfile, Intent, Message
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +109,7 @@ async def send_message(
         intent=Intent(intent),
     )
     async with Mailbox(config) as mailbox:
+        await mailbox.touch(project, agent)
         await mailbox.send(message)
     return _dump(message)
 
@@ -118,6 +125,7 @@ async def check_inbox() -> dict[str, Any]:
     config = _config()
     project, agent = resolve_identity(config)
     async with Mailbox(config) as mailbox:
+        await mailbox.touch(project, agent)
         messages = await mailbox.peek(project, agent)
     return {
         "mailbox": _envelope(config, project, agent),
@@ -134,6 +142,7 @@ async def read_message(message_id: str) -> dict[str, Any]:
     config = _config()
     project, agent = resolve_identity(config)
     async with Mailbox(config) as mailbox:
+        await mailbox.touch(project, agent)
         message = await mailbox.read(project, agent, message_id)
     return {
         "mailbox": _envelope(config, project, agent),
@@ -149,6 +158,7 @@ async def reply_message(
     config = _config()
     project, agent = resolve_identity(config)
     async with Mailbox(config) as mailbox:
+        await mailbox.touch(project, agent)
         reply = await mailbox.reply(project, agent, message_id, body, subject)
     return _dump(reply)
 
@@ -173,6 +183,7 @@ async def ping() -> dict[str, Any]:
     config = _config()
     project, agent = resolve_identity(config)
     async with Mailbox(config) as mailbox:
+        await mailbox.touch(project, agent)
         received = await mailbox.ping(project, agent)
     return {
         "ok": True,
@@ -190,6 +201,87 @@ async def hub_info() -> dict[str, Any]:
     """
     config = _config()
     return hub_descriptor(config, max_message_bytes=config.max_message_bytes)
+
+
+@mcp.tool()
+async def register(
+    model: str | None = None,
+    status: str = "available",
+    offers: list[str] | None = None,
+    needs: list[str] | None = None,
+    working_dir: str | None = None,
+    hostname: str | None = None,
+    ide: str | None = None,
+    open_to_help: bool | None = None,
+    objective: str | None = None,
+    charter_summary: str | None = None,
+    human: str | None = None,
+) -> dict[str, Any]:
+    """Register/refresh my profile so other agents can find me and what I do.
+
+    Call on sign-on. `offers` = what you can do for others; `needs` = help you want —
+    those two are how the host matches agents up. Everything is optional; you can only
+    set your own profile (identity comes from your connection).
+    """
+    config = _config()
+    project, agent = resolve_identity(config)
+    profile = AgentProfile(
+        model=model,
+        status=status,
+        offers=offers or [],
+        needs=needs or [],
+        working_dir=working_dir,
+        hostname=hostname,
+        ide=ide,
+        open_to_help=open_to_help,
+        objective=objective,
+        charter_summary=charter_summary,
+        human=human,
+    )
+    async with Mailbox(config) as mailbox:
+        info = await mailbox.register(project, agent, profile)
+    return info.model_dump(mode="json")
+
+
+@mcp.tool()
+async def update_status(status: str) -> dict[str, Any]:
+    """Update just my status: `available`, `busy`, or `away`."""
+    config = _config()
+    project, agent = resolve_identity(config)
+    async with Mailbox(config) as mailbox:
+        info = await mailbox.update_status(project, agent, status)
+    return info.model_dump(mode="json")
+
+
+@mcp.tool()
+async def list_agents(project: str | None = None) -> dict[str, Any]:
+    """List agents in the directory (optionally one project): who's here, whether
+    they're online (seen recently), and their profiles (offers/needs/role)."""
+    config = _config()
+    caller_project, caller_agent = resolve_identity(config)
+    async with Mailbox(config) as mailbox:
+        await mailbox.touch(caller_project, caller_agent)
+        agents = await mailbox.list_agents(project)
+    return {
+        "mailbox": _envelope(config, caller_project, caller_agent),
+        "agents": [a.model_dump(mode="json") for a in agents],
+    }
+
+
+@mcp.tool()
+async def whois(address: str) -> dict[str, Any]:
+    """Look up one agent's directory card. `address` is `project/agent`."""
+    config = _config()
+    kind, project, agent = parse_target(address)
+    if kind != "direct" or project is None or agent is None:
+        raise ValueError(
+            f"whois needs a specific project/agent address, got {address!r}"
+        )
+    async with Mailbox(config) as mailbox:
+        info = await mailbox.whois(project, agent)
+    return (
+        info.model_dump(mode="json") if info else {"found": False, "address": address}
+    )
 
 
 # -- HTTP multi-tenant identity middleware --------------------------------------

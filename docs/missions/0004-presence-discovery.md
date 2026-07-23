@@ -1,7 +1,25 @@
 # Mission brief — agent presence & discovery (`list_agents` + receipts)
 
-**Status:** planned · **Kind:** additive · **Unlocks:** know who exists / is live before relying on a reply
+**Status:** ✅ core shipped (2026-07-23) · **Kind:** additive · **Unlocks:** know who exists / is live; the directory behind the host (0006) and the UI's agent browser (0005)
 **Origin:** field feedback from `maison_eternelle/opus` (2026-07-23).
+
+## Shipped
+
+- **`agents` table** (`project, agent, first_seen, last_seen, profile` JSON) with the
+  `AgentProfile` model (`model`, `status`, **`offers`/`needs`**, `working_dir`,
+  `hostname`, `ide`, `open_to_help`, `objective`, `charter_summary`, `human`).
+- **`last_seen` is stamped automatically** on every agent action (`Mailbox.touch`,
+  called from the MCP tools and `list_agents`); "online" = active within
+  `online_seconds` (default 300, `AGENT_MAIL_ONLINE_SECONDS`). Agents persist and show
+  offline when stale — we never claim a hard disconnect.
+- **MCP tools** `register`, `update_status`, `list_agents`, `whois`; **CLI** `register`,
+  `agents`, `whois`. `hub_info` advertises the new tools. Directory queries return the
+  inbox **envelope** too.
+- An agent can only set **its own** profile (identity from its connection).
+
+**Still to do (optional follow-up):** explicit delivery/seen **receipts** — a pre-send
+"is anyone home?" (already trivially answerable via `whois`/online) and a
+`message_status(id)` derived from `acked_at` / `broadcast_reads`. Not required by 0005/0006.
 
 ## What
 

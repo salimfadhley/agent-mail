@@ -16,7 +16,7 @@ import pytest_asyncio
 from agent_mail.config import Config
 from agent_mail.exceptions import ConfigError, MailboxError
 from agent_mail.mailbox import Mailbox
-from agent_mail.models import Intent, Message
+from agent_mail.models import AgentProfile, Intent, Message
 
 
 @pytest_asyncio.fixture
@@ -152,6 +152,78 @@ async def test_notify_is_a_noop_but_validates(mailbox: Mailbox) -> None:
     await mailbox.notify(f"{_project()}/x")  # success = no raise
     with pytest.raises(ConfigError):
         await mailbox.notify("bad project/x")
+
+
+async def test_register_and_whois(mailbox: Mailbox) -> None:
+    profile = AgentProfile(
+        model="claude-opus",
+        offers=["deploys", "the legal corpus"],
+        needs=["balsa wood"],
+        charter_summary="runs the pipeline",
+    )
+    info = await mailbox.register("goldberg", "opus", profile)
+    assert info.address == "goldberg/opus"
+    assert info.online is True
+    assert info.profile.offers == ["deploys", "the legal corpus"]
+
+    got = await mailbox.whois("goldberg", "opus")
+    assert got is not None
+    assert got.profile.needs == ["balsa wood"]
+    assert got.profile.charter_summary == "runs the pipeline"
+
+    assert await mailbox.whois("goldberg", "nobody") is None
+
+
+async def test_list_agents_and_project_filter(mailbox: Mailbox) -> None:
+    await mailbox.register("proj-a", "alice", AgentProfile(status="busy"))
+    await mailbox.register("proj-a", "bob", AgentProfile())
+    await mailbox.register("proj-b", "carol", AgentProfile())
+
+    everyone = await mailbox.list_agents()
+    assert {a.address for a in everyone} == {
+        "proj-a/alice",
+        "proj-a/bob",
+        "proj-b/carol",
+    }
+    only_a = await mailbox.list_agents("proj-a")
+    assert {a.address for a in only_a} == {"proj-a/alice", "proj-a/bob"}
+
+
+async def test_touch_creates_and_updates_last_seen(mailbox: Mailbox) -> None:
+    await mailbox.touch("p", "a")
+    first = await mailbox.whois("p", "a")
+    assert first is not None and first.online is True
+    # touching again keeps first_seen but advances last_seen
+    await mailbox.touch("p", "a")
+    second = await mailbox.whois("p", "a")
+    assert second is not None
+    assert second.first_seen == first.first_seen
+    assert second.last_seen >= first.last_seen
+
+
+async def test_update_status(mailbox: Mailbox) -> None:
+    await mailbox.register("p", "a", AgentProfile(offers=["x"]))
+    info = await mailbox.update_status("p", "a", "away")
+    assert info.profile.status == "away"
+    assert info.profile.offers == ["x"]  # other fields preserved
+
+
+async def test_online_threshold(tmp_path: Path) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    config = Config().model_copy(
+        update={"db": str(tmp_path / "mail.db"), "online_seconds": 300}
+    )
+    async with Mailbox(config) as mb:
+        await mb.register("p", "a", AgentProfile())
+        assert (await mb.whois("p", "a")).online is True  # type: ignore[union-attr]
+        old = (datetime.now(tz=UTC) - timedelta(hours=1)).isoformat()
+        await mb._conn.execute(
+            "UPDATE agents SET last_seen = ? WHERE project = 'p' AND agent = 'a'",
+            (old,),
+        )
+        await mb._conn.commit()
+        assert (await mb.whois("p", "a")).online is False  # type: ignore[union-attr]
 
 
 async def test_max_message_size_enforced(tmp_path: Path) -> None:

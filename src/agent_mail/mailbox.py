@@ -26,7 +26,7 @@ import aiosqlite
 
 from agent_mail.config import Config, format_address, parse_target
 from agent_mail.exceptions import MailboxError
-from agent_mail.models import Intent, Message
+from agent_mail.models import AgentInfo, AgentProfile, Intent, Message
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +55,16 @@ CREATE TABLE IF NOT EXISTS broadcast_reads (
     acked_at    TEXT NOT NULL,
     PRIMARY KEY (message_id, reader)
 );
+
+CREATE TABLE IF NOT EXISTS agents (
+    project     TEXT NOT NULL,
+    agent       TEXT NOT NULL,
+    first_seen  TEXT NOT NULL,
+    last_seen   TEXT NOT NULL,
+    profile     TEXT NOT NULL DEFAULT '{}',   -- JSON AgentProfile
+    PRIMARY KEY (project, agent)
+);
+CREATE INDEX IF NOT EXISTS idx_agents_last_seen ON agents (last_seen);
 """
 
 
@@ -309,6 +319,81 @@ class Mailbox:
         received = await self.read(project, agent, probe.id)
         logger.debug("ping round-trip ok for %s (%s)", me, probe.id)
         return received
+
+    # -- directory / presence ---------------------------------------------
+
+    async def touch(self, project: str, agent: str) -> None:
+        """Record that ``project/agent`` was just active (upsert ``last_seen``)."""
+        now = _now_iso()
+        await self._conn.execute(
+            "INSERT INTO agents (project, agent, first_seen, last_seen) "
+            "VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(project, agent) DO UPDATE SET last_seen = excluded.last_seen",
+            (project, agent, now, now),
+        )
+        await self._conn.commit()
+
+    async def register(
+        self, project: str, agent: str, profile: AgentProfile
+    ) -> AgentInfo:
+        """Set ``project/agent``'s profile (and mark it active). Returns the entry."""
+        now = _now_iso()
+        await self._conn.execute(
+            "INSERT INTO agents (project, agent, first_seen, last_seen, profile) "
+            "VALUES (?, ?, ?, ?, ?) "
+            "ON CONFLICT(project, agent) DO UPDATE SET "
+            "last_seen = excluded.last_seen, profile = excluded.profile",
+            (project, agent, now, now, profile.model_dump_json()),
+        )
+        await self._conn.commit()
+        info = await self.whois(project, agent)
+        assert info is not None  # just inserted
+        return info
+
+    async def update_status(self, project: str, agent: str, status: str) -> AgentInfo:
+        """Update just the ``status`` of an agent's profile (creates it if absent)."""
+        current = await self.whois(project, agent)
+        profile = current.profile if current else AgentProfile()
+        return await self.register(
+            project, agent, profile.model_copy(update={"status": status})
+        )
+
+    def _row_to_agent_info(self, row: aiosqlite.Row) -> AgentInfo:
+        last_seen = datetime.fromisoformat(row["last_seen"])
+        online = datetime.now(tz=UTC) - last_seen <= timedelta(
+            seconds=self._config.online_seconds
+        )
+        return AgentInfo(
+            project=row["project"],
+            agent=row["agent"],
+            address=format_address(row["project"], row["agent"]),
+            first_seen=datetime.fromisoformat(row["first_seen"]),
+            last_seen=last_seen,
+            online=online,
+            profile=AgentProfile.model_validate_json(row["profile"] or "{}"),
+        )
+
+    async def list_agents(self, project: str | None = None) -> list[AgentInfo]:
+        """List directory entries (optionally one project), newest-active first."""
+        if project is not None:
+            cursor = await self._conn.execute(
+                "SELECT * FROM agents WHERE project = ? ORDER BY last_seen DESC",
+                (project,),
+            )
+        else:
+            cursor = await self._conn.execute(
+                "SELECT * FROM agents ORDER BY last_seen DESC"
+            )
+        rows = await cursor.fetchall()
+        return [self._row_to_agent_info(row) for row in rows]
+
+    async def whois(self, project: str, agent: str) -> AgentInfo | None:
+        """Return one agent's directory entry, or ``None`` if never registered."""
+        cursor = await self._conn.execute(
+            "SELECT * FROM agents WHERE project = ? AND agent = ?", (project, agent)
+        )
+        row = await cursor.fetchone()
+        return self._row_to_agent_info(row) if row else None
 
 
 def _reply_subject(subject: str) -> str:

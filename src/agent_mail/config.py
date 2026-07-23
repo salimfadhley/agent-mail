@@ -36,6 +36,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_MAX_MESSAGE_BYTES = 1_048_576  # 1 MiB
 DEFAULT_TTL_DAYS = 14
+DEFAULT_ONLINE_SECONDS = 300  # an agent is "online" if seen within this window
 
 _BAKED_DEFAULTS = Path(__file__).parent / "defaults.toml"
 _VALID_TOKEN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
@@ -155,6 +156,10 @@ class Config(BaseSettings):
     max_message_bytes: int = Field(
         default=DEFAULT_MAX_MESSAGE_BYTES,
         validation_alias=_alias("max_message_bytes", "AGENT_MAIL_MAX_MESSAGE_BYTES"),
+    )
+    online_seconds: int = Field(
+        default=DEFAULT_ONLINE_SECONDS,
+        validation_alias=_alias("online_seconds", "AGENT_MAIL_ONLINE_SECONDS"),
     )
 
     # -- identity (two-part: project + agent) -----------------------------
@@ -343,5 +348,9 @@ def hub_descriptor(
             "notify_agent",
             "ping",
             "hub_info",
+            "register",
+            "update_status",
+            "list_agents",
+            "whois",
         ],
     }
