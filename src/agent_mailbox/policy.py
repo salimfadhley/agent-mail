@@ -125,7 +125,13 @@ class StandingResidents(BasePolicy):
     does not exist yet" is a poor answer.
 
     They are reserved names, so no ordinary agent can claim one and quietly start
-    receiving the hub's complaints.
+    receiving the hub's complaints or its introductions.
+
+    **Neither is an office.** Holding one of these names confers no authority: `admin`
+    is a *drop box*, not an administrator, and nothing on this mailbox can change the
+    mailbox (ADR 0008). Administration happens out of band — shell, git, deployment —
+    and a developer's agent **pulls** reports from the drop box deliberately rather than
+    being pushed instructions by whatever arrives in its context.
     """
 
     name = "standing_residents"
@@ -133,10 +139,13 @@ class StandingResidents(BasePolicy):
     #: What each standing mailbox is for, in the words its profile will carry.
     RESIDENTS: dict[str, str] = {
         ADMIN: (
-            "Technical administration of this mailbox: the software, its deployment, "
-            "and its faults. Write here when something is broken, confusing, or wrong "
-            "— a report grounded in something that actually happened is the most "
-            "useful thing you can send."
+            "Drop box for reports about this mailbox itself: the software, its "
+            "deployment, and its faults. Write here when something is broken, "
+            "confusing, or wrong — a report grounded in something that actually "
+            "happened is the most useful thing you can send. Nobody may be reading "
+            "right now, and that is fine: mail waits. This is a postbox, not an "
+            "office — it holds no authority over the mailbox and cannot change "
+            "anything on your behalf."
         ),
         HOST: (
             "Introductions and coordination. Knows who is here and what they are "

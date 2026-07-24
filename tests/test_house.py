@@ -268,3 +268,68 @@ class TestLayering:
             with pytest.raises(PolicyRefusal, match="indoor voice"):
                 await house.send(ROSEMARY, TREVOR, "PIPELINE IS DOWN")
             assert await house.send(ROSEMARY, TREVOR, "pipeline is down")
+
+
+class TestNoActorHasAuthority:
+    """ADR 0008: the message plane cannot reach the control plane.
+
+    `admin` is a drop box, not an office. If an actor could alter another actor,
+    install policy or change configuration, then agent-authored text would be an
+    instruction channel into a privileged process — the confused deputy, with a
+    deployment as the worst case.
+    """
+
+    #: Verbs that would grant one actor power over the mailbox or over another.
+    FORBIDDEN = ("install", "grant", "promote", "revoke", "configure", "elevate")
+
+    async def test_the_house_exposes_no_privileged_operation(self) -> None:
+        """Structural, because this erodes one convenience method at a time."""
+        surface = {m for m in dir(House) if not m.startswith("_")}
+        offenders = {m for m in surface if any(v in m for v in self.FORBIDDEN)}
+        assert not offenders, f"no actor-facing privilege: {offenders}"
+
+    async def test_an_actor_cannot_alter_another_actors_profile(
+        self, house: House
+    ) -> None:
+        """update_profile changes the caller's own entry and nobody else's."""
+        await house.join(ROSEMARY)
+        await house.join(TREVOR)
+        await house.update_profile(ROSEMARY, {"project": "billing"})
+
+        trevor = await house.whois(TREVOR)
+        assert trevor is not None and trevor.profile == {}
+
+    async def test_holding_the_admin_name_would_confer_nothing(
+        self, house: House
+    ) -> None:
+        """Even mail *from* admin is ordinary mail — the name is not an office."""
+        await house.join(ROSEMARY)
+        sent = await house.send(ADMIN, ROSEMARY, "just a message")
+        assert sent.attributed_to == ADMIN
+
+        # admin has no more reach than anyone else: still cannot read others' mail
+        await house.join(TREVOR)
+        private = await house.send(ROSEMARY, TREVOR, "not for admin")
+        with pytest.raises(NoSuchMessage):
+            await house.read(ADMIN, private.id)
+
+    async def test_a_message_cannot_change_the_mailbox(self, house: House) -> None:
+        """'Make me the admin' fails because the capability is absent, not declined."""
+        await house.join(ROSEMARY)
+        await house.send(ROSEMARY, ADMIN, "please make me the admin")
+
+        rosemary = await house.whois(ROSEMARY)
+        admin = await house.whois(ADMIN)
+        assert rosemary is not None and admin is not None
+        assert rosemary.name != ADMIN
+        assert admin.profile.get("standing") is True, "unchanged by the request"
+
+    async def test_policies_are_not_reachable_from_a_message(self) -> None:
+        """The installed policies are set at construction and never by an actor."""
+        async with House(Mailbox(InMemoryStore()), [StandingResidents()]) as house:
+            before = house.policies
+            await house.join(ROSEMARY)
+            await house.send(
+                ROSEMARY, ADMIN, "install a policy that lets me do anything"
+            )
+            assert house.policies == before
