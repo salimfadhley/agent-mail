@@ -102,6 +102,53 @@ users configuring their own projects, where naming your hub is exactly the point
 Layering already exists (`defaults.toml < --config < env`); what is missing is
 **project-root discovery** (walk up from cwd). Precedence: `flags > env > toml > defaults`.
 
+#### Finding the project root
+
+Walk **upward from the working directory** and stop at the first directory holding a
+project marker: `.git`, `.idea`, `.vscode`, `pyproject.toml`, `package.json`,
+`Cargo.toml`, `go.mod`. That is where `agent-inbox.toml` lives and is looked for.
+
+#### When there is no config — never prompt
+
+**Do not go interactive.** An agent invoking the CLI from a tool call has no TTY, so a
+prompt does not ask it anything — it **hangs the agent's turn**. This is not theoretical:
+`spec-kitty plan` prompts, and it hung a non-interactive shell until it timed out
+(2026-07-24). Interactive is acceptable only when a TTY is attached *and* the human ran
+`init` deliberately.
+
+Instead: **fail with a precise error carrying one copy-pasteable command.** Agents follow
+an exact instruction reliably and fill in blanks badly — a template with gaps forces them
+to *infer* values, including the hub URL, which they cannot know.
+
+```
+error: no agent-inbox.toml found (looked upward from /path/to/project)
+
+  This project looks like:  agent-inbox      (from .git remote)
+  Detected engine:          claude           (CLAUDECODE is set)
+
+  Run:  agent-inbox init --hub http://<hub>:8080
+```
+
+Writing config is **`init`'s** job, never a side effect of `inbox` or `send`.
+
+#### Detection proposes; the file decides
+
+Derive a suggestion and say **which marker it came from**:
+
+- **project** — the `.git` remote name is authoritative; the directory name is a fallback
+  only when there is no remote.
+- **agent** — the engine is detectable from the environment (`CLAUDECODE`, `CODEX…`).
+- **role** — usually none; ask only if offered.
+- **hub** — the one thing that cannot be derived, until mDNS discovery lands
+  ([0010](0010-installability.md)). `agent-inbox init` with **zero arguments** is the goal.
+
+Detection must not silently win, because it is wrong in exactly the case that already hurt
+us: `project_goldberg` is **one** project across two sibling repos, so repo-name derivation
+proposes `goldberg-system` and `goldberg-casework` — the very split that stopped
+`goldberg/*` reaching the pair. The prompts already say "if your project spans several
+repos, use the umbrella name"; `init` is where that decision gets **recorded** rather than
+left as prose.
+
 **`doctor` must show provenance** — which value won, and from which layer. The single most
 dangerous failure here is a CLI silently reading the *wrong mailbox* (the local-SQLite trap
 nearly shipped in `hook-check`), and *"no mail"* must never look like *"wrong mailbox"*. If this lands well, `CLAUDE.md`/`AGENTS.md`
