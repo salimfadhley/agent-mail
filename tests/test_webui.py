@@ -377,3 +377,38 @@ async def test_unread_probe_endpoint(env: tuple[Config, Mailbox]) -> None:
 
     empty = await _asgi(mw, "GET", f"/{p}/nobody/unread")
     assert json.loads(empty["body"])["unread"] == 0
+
+
+# -- three-part addressing in the console (mission 0011) ----------------------
+
+
+async def test_console_routes_and_links_full_three_part_addresses(
+    env: tuple[Config, Mailbox],
+) -> None:
+    """A role-holding agent must be reachable and linked by its FULL address.
+
+    The console once displayed three-part names while linking only project/agent, so
+    two different agents pointed at the same mailbox.
+    """
+    config, mb = env
+    p = _project()
+    await mb.register(p, "claude", AgentProfile(), "admin")
+    await mb.register(p, "claude", AgentProfile(), "host")
+    await mb.register(p, "codex", AgentProfile())  # no role — must be unaffected
+    await mb.send(
+        Message(from_=f"{p}/codex", to=f"{p}/claude/admin", subject="for admin", body="x")
+    )
+    console = WebConsole(config)
+
+    directory = await _asgi(console, "GET", "/ui/agents")
+    assert f'href="/ui/mbox/{p}/claude/admin"' in directory["body"]
+    assert f'href="/ui/mbox/{p}/claude/host"' in directory["body"]
+    assert f'href="/ui/mbox/{p}/codex"' in directory["body"]
+
+    # the three-part mailbox resolves, and shows mail addressed to that role
+    page = await _asgi(console, "GET", f"/ui/mbox/{p}/claude/admin")
+    assert page["status"] == 200
+    assert "for admin" in page["body"]
+
+    # the two-part mailbox still works
+    assert (await _asgi(console, "GET", f"/ui/mbox/{p}/codex"))["status"] == 200

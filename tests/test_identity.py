@@ -19,15 +19,15 @@ def _config(project: str | None, agent: str | None) -> Config:
 
 
 def test_per_request_identity_wins_over_env() -> None:
-    token = set_current_agent(("proj", "alice"))
+    token = set_current_agent(("proj", "alice", None))
     try:
-        assert resolve_identity(_config("server", "default")) == ("proj", "alice")
+        assert resolve_identity(_config("server", "default")) == ("proj", "alice", None)
     finally:
         reset_current_agent(token)
 
 
 def test_falls_back_to_env_identity() -> None:
-    assert resolve_identity(_config("proj", "bob")) == ("proj", "bob")
+    assert resolve_identity(_config("proj", "bob")) == ("proj", "bob", None)
 
 
 def test_raises_without_any_identity() -> None:
@@ -55,19 +55,19 @@ def _extract(
 
 def test_path_identity_is_extracted_and_rewritten() -> None:
     address, rewritten = _extract("/agent-inbox/casework/mcp")
-    assert address == ("agent-inbox", "casework")
+    assert address == ("agent-inbox", "casework", None)
     assert rewritten == "/mcp"
 
 
 def test_path_identity_preserves_subpath() -> None:
     address, rewritten = _extract("/agent-inbox/casework/mcp/messages")
-    assert address == ("agent-inbox", "casework")
+    assert address == ("agent-inbox", "casework", None)
     assert rewritten == "/mcp/messages"
 
 
 def test_query_identity_is_extracted() -> None:
     address, rewritten = _extract("/mcp", query=b"project=proj&agent=alice")
-    assert address == ("proj", "alice")
+    assert address == ("proj", "alice", None)
     assert rewritten == "/mcp"
 
 
@@ -75,9 +75,51 @@ def test_header_identity_is_extracted() -> None:
     address, _ = _extract(
         "/mcp", headers=[(b"x-agent-project", b"proj"), (b"x-agent-id", b"gemini")]
     )
-    assert address == ("proj", "gemini")
+    assert address == ("proj", "gemini", None)
 
 
 def test_plain_mount_has_no_identity() -> None:
     address, _ = _extract("/mcp")
     assert address is None
+
+
+# -- three-part identity (mission 0011) ---------------------------------------
+
+
+def test_role_is_extracted_from_the_url() -> None:
+    """/<project>/<agent>/<role>/mcp — the role is the third position."""
+    address, rewritten = _extract("/agent-inbox/claude/admin/mcp")
+    assert address == ("agent-inbox", "claude", "admin")
+    assert rewritten == "/mcp"
+
+
+def test_role_url_preserves_subpath() -> None:
+    address, rewritten = _extract("/agent-inbox/claude/admin/mcp/messages")
+    assert address == ("agent-inbox", "claude", "admin")
+    assert rewritten == "/mcp/messages"
+
+
+def test_two_part_urls_are_unaffected() -> None:
+    """Most agents hold no role; their existing URLs must keep working untouched."""
+    address, rewritten = _extract("/proj/claude/mcp")
+    assert address == ("proj", "claude", None)
+    assert rewritten == "/mcp"
+
+
+def test_role_from_query_and_header() -> None:
+    address, _ = _extract("/mcp", query=b"project=p&agent=a&role=host")
+    assert address == ("p", "a", "host")
+    address, _ = _extract(
+        "/mcp",
+        headers=[
+            (b"x-agent-project", b"p"),
+            (b"x-agent-id", b"a"),
+            (b"x-agent-role", b"host"),
+        ],
+    )
+    assert address == ("p", "a", "host")
+
+
+def test_role_falls_back_to_config_for_stdio() -> None:
+    config = _config("proj", "claude").model_copy(update={"role": "admin"})
+    assert resolve_identity(config) == ("proj", "claude", "admin")

@@ -29,7 +29,7 @@
   <tr><th>Agent</th><th>Status</th><th>Last seen</th></tr>
   {% for a in agents %}
   <tr>
-    <td><a href="/ui/mbox/{{ a.project }}/{{ a.agent }}">{{ a.address }}</a></td>
+    <td><a href="/ui/mbox/{{ a.address }}">{{ a.address }}</a></td>
     <td>{% if a.online %}<span class="pill on">online</span>{% else %}<span class="pill off">offline</span>{% endif %}</td>
     <td class="muted">{{ a.last_seen | shortdate }}</td>
   </tr>

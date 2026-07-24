@@ -182,8 +182,10 @@ class WebConsole:
             await self._agents(send)
         elif parts == ["mbox"] and len(parts) == 1:
             await self._redirect(send, "/ui/agents")
-        elif parts[0] == "mbox" and len(parts) == 3:
-            await self._mailbox(send, parts[1], parts[2])
+        elif parts[0] == "mbox" and len(parts) in (3, 4):
+            await self._mailbox(
+                send, parts[1], parts[2], parts[3] if len(parts) == 4 else None
+            )
         elif parts[0] == "msg" and len(parts) == 2:
             await self._message(send, parts[1])
         elif parts == ["compose"]:
@@ -231,22 +233,25 @@ class WebConsole:
             agents = await mb.list_agents()
         await self._render(send, "agents.html", agents=agents)
 
-    async def _mailbox(self, send: Send, project: str, agent: str) -> None:
+    async def _mailbox(
+        self, send: Send, project: str, agent: str, role: str | None = None
+    ) -> None:
         try:
-            format_address(project, agent)
+            format_address(project, agent, role)
         except AgentInboxError:
             await self._error(send, 400, "Bad address", "That is not a valid mailbox.")
             return
         async with Mailbox(self._config) as mb:
-            items = await mb.browse(project, agent)
-            info = await mb.whois(project, agent)
+            items = await mb.browse(project, agent, role)
+            info = await mb.whois(project, agent, role)
         interactive = (project, agent) == (self._op_project, self._op_agent)
         await self._render(
             send,
             "mailbox.html",
             project=project,
             agent=agent,
-            address=format_address(project, agent),
+            role=role,
+            address=format_address(project, agent, role),
             items=items,
             info=info,
             interactive=interactive,

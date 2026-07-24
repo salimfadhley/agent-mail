@@ -8,7 +8,7 @@
   {% for a in agents %}
   <tr>
     <td>
-      <a href="/ui/mbox/{{ a.project }}/{{ a.agent }}">{{ a.address }}</a>
+      <a href="/ui/mbox/{{ a.address }}">{{ a.address }}</a>
       {% if a.profile.human %}<div class="muted">for {{ a.profile.human }}</div>{% endif %}
     </td>
     <td>

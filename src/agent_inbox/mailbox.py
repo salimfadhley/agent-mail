@@ -515,11 +515,12 @@ class Mailbox:
         message_id: str,
         body: str,
         subject: str | None = None,
+        role: str | None = None,
     ) -> Message:
         """Consume message ``message_id`` and reply directly to its sender."""
-        original = await self.read(project, agent, message_id)
+        original = await self.read(project, agent, message_id, role)
         reply = Message(
-            from_=format_address(project, agent),
+            from_=format_address(project, agent, role),
             to=original.from_,
             thread=original.thread or original.id,
             intent=Intent.reply,
@@ -538,12 +539,12 @@ class Mailbox:
         parse_target(to)  # validate the address; raise on a malformed one
         logger.debug("notify %s (no-op with the sqlite backend)", to)
 
-    async def ping(self, project: str, agent: str) -> Message:
-        """Round-trip a probe to ``project/agent`` itself and consume it."""
-        me = format_address(project, agent)
+    async def ping(self, project: str, agent: str, role: str | None = None) -> Message:
+        """Round-trip a probe to this agent's own address and consume it."""
+        me = format_address(project, agent, role)
         probe = Message(from_=me, to=me, subject="agent-inbox ping", body="ping")
         await self.send(probe)
-        received = await self.read(project, agent, probe.id)
+        received = await self.read(project, agent, probe.id, role)
         logger.debug("ping round-trip ok for %s (%s)", me, probe.id)
         return received
 
@@ -619,12 +620,14 @@ class Mailbox:
                 removed.append(address)
         return removed
 
-    async def update_status(self, project: str, agent: str, status: str) -> AgentInfo:
+    async def update_status(
+        self, project: str, agent: str, status: str, role: str | None = None
+    ) -> AgentInfo:
         """Update just the ``status`` of an agent's profile (creates it if absent)."""
-        current = await self.whois(project, agent)
+        current = await self.whois(project, agent, role)
         profile = current.profile if current else AgentProfile()
         return await self.register(
-            project, agent, profile.model_copy(update={"status": status})
+            project, agent, profile.model_copy(update={"status": status}), role
         )
 
     def _row_to_agent_info(self, row: aiosqlite.Row) -> AgentInfo:

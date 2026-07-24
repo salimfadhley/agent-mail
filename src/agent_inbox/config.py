@@ -271,6 +271,11 @@ class Config(BaseSettings):
     agent_id: str | None = Field(
         default=None, validation_alias=_alias("agent_id", "AGENT_ID")
     )
+    # Optional third address position. Most agents hold no distinct role; the hub's
+    # own infrastructure nodes (host, admin) do.
+    role: str | None = Field(
+        default=None, validation_alias=_alias("role", "AGENT_ROLE")
+    )
 
     # -- MCP server -------------------------------------------------------
     transport: str = Field(
