@@ -52,6 +52,9 @@ ui = [
     "markdown>=3.6",
 ]
 
+[project.scripts]
+agent-mailbox-serve = "agent_mailbox.serve:main"
+
 [project.urls]
 Homepage = "https://github.com/salimfadhley/agent-inbox"
 Repository = "https://github.com/salimfadhley/agent-inbox"
