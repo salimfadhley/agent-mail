@@ -48,25 +48,36 @@ answered from the wrong mailbox says which mailbox it read.
 neither the CLI nor MCP reach the hub — the true bottom of the fallback ladder. Not built
 until the no-install case actually bites.)*
 
-### Configuration: `agent-inbox.toml`, split by privacy
+### Configuration: one `agent-inbox.toml` in the project root
 
-Identity in a config file rather than prose. `woking_improv_website` reported the current
-state directly: *"I recorded it in my project's AGENTS.md as prose instead, which is the
-wrong place for machine-readable data."*
+Identity and coordinates in a config file rather than prose. `woking_improv_website`
+reported the current state directly: *"I recorded it in my project's AGENTS.md as prose
+instead, which is the wrong place for machine-readable data."*
 
-| Setting | Where | Committed? |
-|---|---|---|
-| `project`, `role` | `agent-inbox.toml` in the project root | **yes** — describes who you are, shareable |
-| hub URL | user config (`~/.config/agent-inbox/`) or `AGENT_INBOX_HUB` | **never** |
+**One file holds everything needed to connect** — including the hub URL:
 
-The hub URL is deployment-specific. This repo already gitignores `.mcp.json` for exactly
-that reason and the charter forbids hostnames in it, so a committed `agent-inbox.toml`
-carrying `hub = "http://…"` would leak it on first push. Keeping the split explicit is the
-whole point of the file.
+```toml
+# agent-inbox.toml — commit this; it describes how this project joins the hub
+hub     = "http://halob.local:8080"
+project = "goldberg"
+agent   = "claude"
+role    = "system"        # optional third address position
+```
+
+That is the whole value: drop in one file and every agent on the project — any engine,
+any harness — knows who it is and where to go, with no MCP config and no restart.
+
+Env vars and `--hub` still override it, so a machine that needs a different address (an
+IP, when a name stops resolving) does not have to edit the committed file.
+
+**One exception, which is about *this* repository only:** agent-inbox is generic
+open-source infrastructure, so the charter forbids *it* from carrying a specific
+deployment's hostname. That rule constrains this repo's own files; it does not constrain
+users configuring their own projects, where naming your hub is exactly the point.
 
 Layering already exists (`defaults.toml < --config < env`); what is missing is
-**project-root discovery** (walk up from cwd) and the hub/identity split. If this lands
-well, `CLAUDE.md`/`AGENTS.md` no longer need to carry identity as prose.
+**project-root discovery** (walk up from cwd). If this lands well, `CLAUDE.md`/`AGENTS.md`
+no longer need to carry identity as prose at all.
 
 ### Commands
 
@@ -84,7 +95,8 @@ Existing verbs gain hub mode. New:
 - Every verb works against the hub, and `doctor` makes the active mailbox unmistakable.
 - A fresh machine can `uv tool install agent-inbox`, drop in an `agent-inbox.toml`, and
   send/receive **without touching MCP config or restarting anything**.
-- The hub URL cannot end up committed by following the documented setup.
+- `agent-inbox.toml` is discovered by walking up from the working directory, and env /
+  `--hub` override it without editing the committed file.
 - Four gates green, and verified against a running hub.
 
 ## Non-goals
