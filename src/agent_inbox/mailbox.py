@@ -481,6 +481,7 @@ class Mailbox:
             message = message.model_copy(
                 update={"to": new_address, "forwarded_to": new_address}
             )
+        message = await self._thread_sender_may_join(message)
         payload = message.to_json_bytes()
         cap = self._config.max_message_bytes
         if cap and len(payload) > cap:
@@ -525,6 +526,40 @@ class Mailbox:
     # You never receive your own fan-out. A `claim` addressed at exactly one agent is
     # exempt so that a deliberate self-send still works — `ping` relies on it.
     _NOT_MY_OWN_FANOUT = "NOT (kind = 'fanout' AND from_addr = :me)"
+
+    async def _thread_sender_may_join(self, message: Message) -> Message:
+        """Keep ``message.thread`` only if the sender is party to that thread.
+
+        ``thread`` is caller-supplied and reaches the wire (``send_message(thread=…)``
+        over MCP), so without this a sender can place a turn inside a conversation it
+        cannot see. That is not a disclosure — :meth:`read_thread` filters per turn —
+        but it lets an outsider inject into someone else's thread, which reads as
+        forgery to the participants.
+
+        Refusing is quiet on purpose: the message still sends, it simply **starts its
+        own thread** rather than joining. Erroring would let a sender probe which
+        thread ids exist. Mission 0020.
+        """
+        thread = message.thread
+        if thread is None or thread == message.id:
+            return message  # already its own root; nothing to intrude upon
+        cursor = await self._conn.execute(
+            "SELECT 1 FROM messages WHERE thread = ? LIMIT 1", (thread,)
+        )
+        if await cursor.fetchone() is None:
+            return message  # no such thread yet — this send creates it
+        sender = parse_address(message.from_)
+        if sender.project is not None and sender.agent is not None:
+            params = self._reader(sender.project, sender.agent, sender.role)
+            params["thread"] = thread
+            check = await self._conn.execute(
+                f"SELECT 1 FROM messages WHERE thread = :thread "
+                f"AND {self._party_clause()} LIMIT 1",
+                params,
+            )
+            if await check.fetchone() is not None:
+                return message  # legitimately part of the conversation
+        return message.model_copy(update={"thread": message.id})
 
     def _reader(self, project: str, agent: str, role: str | None) -> dict[str, str]:
         return {

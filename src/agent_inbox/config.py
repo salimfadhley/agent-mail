@@ -108,14 +108,12 @@ class Target:
 
     Addresses are ``<project>/<agent>/<role>``, and **each position narrows
     independently**. A position holding a real token matches only that value; a
-    position holding ``all`` (or ``*``, or simply omitted) matches every value; a
-    position holding ``any`` also matches every value but asks for *one* recipient.
+    position holding ``all`` (or ``*``, or simply omitted) matches every value.
 
-    So ``None`` on a field means "any value matches" — the field is a wildcard — and
-    :attr:`claim` says how many of the matching agents actually receive it:
-
-    * ``claim=True``  -> exactly one matching agent gets it (first read wins).
-    * ``claim=False`` -> every matching agent gets its own copy.
+    So ``None`` on a field means "any value matches" — the field is a wildcard. There
+    is one delivery mode: **every** matching agent gets its own copy. The ``any``
+    keyword, which asked for exactly one recipient, was retired in v0.10.0 — see
+    :data:`RETIRED_TOKENS`.
     """
 
     project: str | None  # None = wildcard

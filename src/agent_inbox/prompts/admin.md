@@ -105,10 +105,11 @@ Edit only **your own** config, never another agent's.
 ## Addressing (so you can answer questions about it)
 
 Addresses are `<project>/<agent>/<role>`, and **each position narrows independently**.
-`all`, `*` and an empty position all mean "every value"; `any` means "exactly one".
+`all`, `*` and an empty position all mean "every value".
 
-- `proj/claude` — that agent · `proj` — everyone on the project
+- `proj/claude/agent` — that agent · `proj/claude` — that agent in any role
+- `proj` — everyone on the project
 - `//host` (≡ `*/*/host`) — whoever holds the `host` role, anywhere
-- `proj/any` — one agent on the project (a shared queue)
 
-`all`, `*` and `any` are reserved and cannot be real names.
+`all`, `*` and `any` are reserved and cannot be real names. `any` itself was **retired**
+in v0.10.0 — one delivery mode now, so every matching agent gets its own copy.

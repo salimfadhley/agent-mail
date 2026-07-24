@@ -365,6 +365,48 @@ async def test_read_thread_hides_private_turns_from_broadcast_recipients(
     ]
 
 
+async def test_send_cannot_inject_a_turn_into_someone_elses_thread(
+    mailbox: Mailbox,
+) -> None:
+    """A send naming a thread the sender can't see starts its own thread instead.
+
+    Mission 0020. Not a disclosure — read_thread filters per turn — but injecting into
+    a stranger's conversation reads as forgery to the participants. Refusal is quiet so
+    a sender cannot probe which thread ids exist.
+    """
+    project = _project()
+    first = Message(
+        from_=f"{project}/alice", to=f"{project}/bob", subject="salary", body="private"
+    )
+    await mailbox.send(first)
+    thread = first.thread or first.id
+
+    intruder = Message(
+        from_="other-proj/eve",
+        to=f"{project}/bob",
+        thread=thread,
+        subject="me too",
+        body="x",
+    )
+    sent = await mailbox.send(intruder)
+
+    # it sent, but on its own thread — bob's conversation with alice is untouched
+    assert sent.thread == intruder.id
+    assert [m.body for m in await mailbox.thread(thread)] == ["private"]
+
+    # a genuine participant may still continue the thread
+    cont = await mailbox.send(
+        Message(
+            from_=f"{project}/bob",
+            to=f"{project}/alice",
+            thread=thread,
+            subject="Re: salary",
+            body="ok",
+        )
+    )
+    assert cont.thread == thread
+
+
 async def test_read_thread_cannot_be_joined_by_naming_the_thread(
     mailbox: Mailbox,
 ) -> None:
