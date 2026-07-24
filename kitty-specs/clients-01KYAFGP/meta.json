@@ -7,6 +7,7 @@
   "mission_number": null,
   "mission_slug": "clients-01KYAFGP",
   "mission_type": "software-dev",
+  "pr_bound": true,
   "purpose_context": "Binding: ADR 0005 (one API; every client is a client; there are no proxies). If a client ever needs to DECIDE something about messaging, the API is missing a route. Priority is the MCP server, because it is the only one that lets an agent use the hub. Definition of done includes a paste-able onboarding prompt and a real agent connecting to the live homelab hub.",
   "purpose_tldr": "An MCP server, a CLI and a web console — all ordinary clients of the one API, none holding messaging semantics.",
   "slug": "clients-01KYAFGP",

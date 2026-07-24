@@ -54,6 +54,7 @@ ui = [
 
 [project.scripts]
 agent-mailbox-serve = "agent_mailbox.serve:main"
+agent-mailbox-mcp = "agent_mailbox.mcp_client:main"
 
 [project.urls]
 Homepage = "https://github.com/salimfadhley/agent-inbox"
