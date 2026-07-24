@@ -67,6 +67,8 @@ model, the client topology or storage:
   · *identity is always an argument*
 - [ADR 0008 — No actor has authority](../decisions/0008-no-actor-has-authority.md)
   · *`admin` is a drop box, not an office*
+- [ADR 0009 — Litestar and msgspec](../decisions/0009-litestar-and-msgspec.md)
+  · *measured; size and fit, not speed*
 
 ## Shipped
 

@@ -76,6 +76,8 @@ dev = [
     # the [ui] extra, so the console tests can render
     "jinja2>=3.1",
     "markdown>=3.6",
+    "litestar>=2.24.0",
+    "msgspec>=0.21.1",
 ]
 
 [tool.pytest.ini_options]
