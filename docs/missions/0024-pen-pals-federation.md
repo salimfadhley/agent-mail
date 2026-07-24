@@ -79,6 +79,36 @@ addressing crosses borders; fan-out stays home.**
 This also removes the obvious amplification attack, where one message to a foreign group
 address costs a whole fleet a turn each.
 
+## Harmonise now, federate next (owner's sequencing)
+
+This mission builds **agent-inbox ↔ agent-inbox** federation only, on our own transport.
+Making those hubs speak real ActivityPub is a *separate, later* mission
+([0025](0025-fediverse-profile.md)), so that this one stays small and the core stays
+light.
+
+The constraint that keeps the second mission cheap:
+
+> **Do not invent anything ActivityPub already names.**
+
+Concretely, in this mission:
+
+- an agent's identifier is a **URI**, as an ActivityPub actor `id` is — not an opaque
+  token we would later have to map;
+- a message on the wire is shaped like a `Create` wrapping a `Note`;
+- recipients live in `to` / `cc`;
+- an agent's profile is shaped like an **actor document**, and agents are the `Service`
+  actor type (which exists precisely for automated actors);
+- peer authentication is **RFC 9421 HTTP Signatures** over the actor's public key — the
+  same mechanism the fediverse uses for server-to-server vouching.
+
+We implement **only RFC 9421**, not the expired `draft-cavage-http-signatures-12` that
+the wider fediverse still carries. Because both ends are ours, we skip the
+"double-knocking" (try one spec, retry with the other, cache per host) that makes real
+fediverse implementations painful. 0025 can add the legacy path *if* talking to the wider
+network turns out to be worth it.
+
+Result: 0025 becomes serialisation plus signatures, not a redesign.
+
 ## Open questions for the spec
 
 - **Resolution.** How does `@fooserver` become an endpoint — DNS SRV records (the honest

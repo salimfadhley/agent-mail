@@ -42,6 +42,7 @@ rather than being absorbed into whatever feature surfaced them.
 | [0022](0022-role-dropped-in-lookups.md) | `role` dropped in lookups | `list_threads` ignored it; `whois` over-required it | ✅ fixed |
 | [0023](0023-assigned-names-and-profiles.md) | Assigned names + profiles | Surrogate keys: hub issues the name, profile carries the facts | planned |
 | [0024](0024-pen-pals-federation.md) | Pen Pals | Mail between hubs, by invitation; `@local` cannot leave | planned |
+| [0025](0025-fediverse-profile.md) | Fediverse profile | Optional edge adapter; borrow the concepts, not the stack | planned |
 
 **0001 (Elasticsearch audit log) was dropped:** with SQLite the `messages` table is already
 the durable, queryable history — see [ADR 0002](../decisions/0002-sqlite-backend.md).
