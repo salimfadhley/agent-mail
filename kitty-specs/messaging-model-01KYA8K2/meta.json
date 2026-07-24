@@ -1,0 +1,16 @@
+{
+  "coordination_branch": "kitty/mission-messaging-model-01KYA8K2",
+  "created_at": "2026-07-24T14:31:09.543266+00:00",
+  "flattened": false,
+  "friendly_name": "M1 — the messaging model",
+  "mission_id": "01KYA8K2DNZ1GARH3CZKTWDNB4",
+  "mission_number": null,
+  "mission_slug": "messaging-model-01KYA8K2",
+  "mission_type": "software-dev",
+  "pr_bound": true,
+  "purpose_context": "Foundational mission. Everything else derives from this: the API reflects the model, and the CLI, stdio MCP server and console are all clients of that API. Binding: ADR 0003 identity is a surrogate key, ADR 0004 follow ActivityStreams except where it conflicts with project goals, ADR 0006 SQLite with typed columns plus a document column. The regression tests from missions 0016, 0020 and 0022 are requirements to re-satisfy, not archive.",
+  "purpose_tldr": "Define the core messaging model on ActivityStreams: actors with hub-unique names, objects with URI ids, to/cc audience, inReplyTo threading — plus the LLM-first properties the fediverse has no answer for.",
+  "slug": "messaging-model-01KYA8K2",
+  "target_branch": "feat/messaging-model",
+  "topology": "coord"
+}

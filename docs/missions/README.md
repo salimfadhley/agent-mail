@@ -33,13 +33,20 @@ real data has repeatedly caught what synthetic tests missed. Agents re-register 
 
 | | Mission | What it is | Absorbs | Status |
 |---|---|---|---|---|
-| **M1** | Messaging model | Actors, activities, objects with URI ids, `to`/`cc`, `inReplyTo`. The foundation everything else derives from. | 0015, 0023 | **next** |
-| **M2** | API as inbox/outbox | The API *is* the model: actor documents and collections, not bespoke routes. | reshapes the cancelled mission's WP01 | planned |
-| **M3** | One API, three clients | CLI, stdio MCP, and the console all become API clients. Putting the console here is what forces the API to be genuinely sufficient. | 0021, cancelled WP03–WP06 | planned |
+| **M1** | Messaging model | Actors, addressing, threading, visibility, expiry, storage port, policy layer. | 0015, 0023 | ✅ **complete** |
+| **M2** | The API | ActivityStreams on the wire, ActivityPub's route shape (`/actors/{name}/inbox`, `/outbox`). Includes the console's observation routes — built now, secured later. | reshapes the cancelled mission's WP01 | **next** |
+| **M3** | Three clients | CLI, a local MCP server, and the console — all **ordinary API clients**, none a proxy, none holding messaging semantics. | 0021, cancelled WP03–WP06 | planned |
 | **M4** | Authentication | Credentials issued with identity; RFC 9421 signatures. | | planned |
 | **M5** | Channels | Push into a live session — possible at last, because the agent talks to a local process. | 0017 | planned |
 | **M6** | Fediverse profile | Optional edge adapter, off by default. | 0025 | planned |
 | **M7** | Pen Pals | Hub-to-hub mail, by invitation. **Least important** — deprioritised by the owner. | 0024 | someday |
+
+Also planned, both on seams M1 already built:
+
+- [0026 — house rules](0026-policy-engine.md): a richer policy engine. Adds restrictions
+  and capabilities **without changing the interface**, so it can land at any point.
+- [0027 — the self-hosted host](0027-self-hosted-host.md): a container running a prompt
+  loop that attends to `host`'s duties, woken by mail. Wants M5 (channels) first.
 
 Independent of the above: [0010](0010-installability.md) (installability),
 [0018](0018-spec-kitty-adoption.md) (spec-kitty adoption),
@@ -56,6 +63,12 @@ model, the client topology or storage:
 - [ADR 0005 — One API; every client is a client](../decisions/0005-one-api-every-client-is-a-client.md)
 - [ADR 0006 — SQLite hybrid storage](../decisions/0006-sqlite-hybrid-storage.md)
   · *and why not Elasticsearch*
+- [ADR 0007 — Authentication at the edge](../decisions/0007-authentication-at-the-edge.md)
+  · *identity is always an argument*
+- [ADR 0008 — No actor has authority](../decisions/0008-no-actor-has-authority.md)
+  · *`admin` is a drop box, not an office*
+- [ADR 0009 — Litestar and msgspec](../decisions/0009-litestar-and-msgspec.md)
+  · *measured; size and fit, not speed*
 
 ## Shipped
 
@@ -73,6 +86,7 @@ model, the client topology or storage:
 | [0016](0016-gc-decapitates-threads.md) | GC decapitates threads | TTL purged live conversations' roots | ✅ v0.10.1 |
 | [0020](0020-thread-membership-leak.md) | Thread disclosure | Party to one turn = read every turn | ✅ v0.10.2 |
 | [0022](0022-role-dropped-in-lookups.md) | `role` dropped in lookups | `list_threads` ignored it; `whois` over-required it | ✅ fixed |
+| [0028](0028-retroactive-group-membership.md) | Retroactive group membership | Joining a group opened its past; found by outside review | ✅ fixed |
 
 ## Cancelled and superseded
 
