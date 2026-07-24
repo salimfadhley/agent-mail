@@ -40,6 +40,7 @@ rather than being absorbed into whatever feature surfaced them.
 | [0020](0020-thread-membership-leak.md) | `read_thread` leaks private mail | Party to one turn = read every turn | ✅ v0.10.2 |
 | [0021](0021-api-first-console.md) | API-first console | One API; the console becomes an ordinary client | planned |
 | [0022](0022-role-dropped-in-lookups.md) | `role` dropped in lookups | `list_threads` ignored it; `whois` over-required it | ✅ fixed |
+| [0023](0023-assigned-names-and-profiles.md) | Assigned names + profiles | Surrogate keys: hub issues the name, profile carries the facts | planned |
 
 **0001 (Elasticsearch audit log) was dropped:** with SQLite the `messages` table is already
 the durable, queryable history — see [ADR 0002](../decisions/0002-sqlite-backend.md).
