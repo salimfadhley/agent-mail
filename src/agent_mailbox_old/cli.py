@@ -14,11 +14,11 @@ from typing import NoReturn
 
 import click
 
-from agent_inbox.config import Config, format_address, hub_descriptor, parse_target
-from agent_inbox.config_env import set_runtime_config_path
-from agent_inbox.exceptions import ConfigError, MailboxError
-from agent_inbox.mailbox import Mailbox
-from agent_inbox.models import AgentInfo, AgentProfile, Intent, Message
+from agent_mailbox_old.config import Config, format_address, hub_descriptor, parse_target
+from agent_mailbox_old.config_env import set_runtime_config_path
+from agent_mailbox_old.exceptions import ConfigError, MailboxError
+from agent_mailbox_old.mailbox import Mailbox
+from agent_mailbox_old.models import AgentInfo, AgentProfile, Intent, Message
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +120,7 @@ def cli(
     ctx.ensure_object(dict)
     set_runtime_config_path(config_path)
     config = Config.from_env(agent_override=from_, project_override=project)
-    logging.getLogger("agent_inbox").setLevel(config.log_level.upper())
+    logging.getLogger("agent_mailbox_old").setLevel(config.log_level.upper())
     ctx.obj["config"] = config
     ctx.obj["as_json"] = as_json
 
@@ -532,7 +532,7 @@ def mcp_serve(
     Over http the server is multi-agent: each agent connects on its own address,
     ``http://<host>:<port>/<agent>/mcp``, which is its whole configuration.
     """
-    from agent_inbox.mcp_server import serve
+    from agent_mailbox_old.mcp_server import serve
 
     base: Config = ctx.obj["config"]
     updates: dict[str, object] = {}

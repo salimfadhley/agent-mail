@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from agent_inbox import prompts
-from agent_inbox.config import Config
+from agent_mailbox_old import prompts
+from agent_mailbox_old.config import Config
 
 
 def _config() -> Config:

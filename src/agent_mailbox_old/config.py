@@ -31,8 +31,8 @@ from pydantic_settings import (
     TomlConfigSettingsSource,
 )
 
-from agent_inbox.config_env import RUNTIME_CONFIG_ENV, runtime_config_path
-from agent_inbox.exceptions import ConfigError
+from agent_mailbox_old.config_env import RUNTIME_CONFIG_ENV, runtime_config_path
+from agent_mailbox_old.exceptions import ConfigError
 
 logger = logging.getLogger(__name__)
 

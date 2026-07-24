@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from agent_inbox.conf_file import (
+from agent_mailbox_old.conf_file import (
     CONFIG_NAME,
     describe_missing,
     find_config,

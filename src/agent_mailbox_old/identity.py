@@ -13,18 +13,18 @@ from __future__ import annotations
 
 from contextvars import ContextVar
 
-from agent_inbox.config import (
+from agent_mailbox_old.config import (
     Config,
     validate_agent_id,
     validate_project,
     validate_role,
 )
-from agent_inbox.exceptions import ConfigError
+from agent_mailbox_old.exceptions import ConfigError
 
 # (project, agent, role) for the current request, or None over stdio. The role is
 # optional — most agents are just agents — so it may be None.
 _current: ContextVar[tuple[str, str, str | None] | None] = ContextVar(
-    "agent_inbox_current_address", default=None
+    "agent_mailbox_old_current_address", default=None
 )
 
 

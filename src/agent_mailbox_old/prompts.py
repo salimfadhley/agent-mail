@@ -12,7 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 from string import Template
 
-from agent_inbox.config import Config, hub_version
+from agent_mailbox_old.config import Config, hub_version
 
 _PROMPTS_DIR = Path(__file__).parent / "prompts"
 

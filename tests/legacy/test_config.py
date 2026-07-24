@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from agent_inbox.config import (
+from agent_mailbox_old.config import (
     DEFAULT_MAX_MESSAGE_BYTES,
     DEFAULT_TTL_DAYS,
     Config,
@@ -20,7 +20,7 @@ from agent_inbox.config import (
     validate_project,
     validate_role,
 )
-from agent_inbox.config_env import set_runtime_config_path
+from agent_mailbox_old.config_env import set_runtime_config_path
 
 
 @pytest.fixture(autouse=True)

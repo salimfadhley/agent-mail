@@ -14,10 +14,10 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 
-from agent_inbox.config import Config
-from agent_inbox.exceptions import ConfigError, MailboxError
-from agent_inbox.mailbox import Mailbox
-from agent_inbox.models import AgentProfile, Intent, Message
+from agent_mailbox_old.config import Config
+from agent_mailbox_old.exceptions import ConfigError, MailboxError
+from agent_mailbox_old.mailbox import Mailbox
+from agent_mailbox_old.models import AgentProfile, Intent, Message
 
 
 @pytest_asyncio.fixture

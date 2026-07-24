@@ -14,8 +14,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from agent_inbox.api import API_PREFIX, IDENTITY_HEADER, build_api
-from agent_inbox.config import Config
+from agent_mailbox_old.api import API_PREFIX, IDENTITY_HEADER, build_api
+from agent_mailbox_old.config import Config
 
 
 @pytest.fixture

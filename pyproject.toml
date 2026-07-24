@@ -1,7 +1,7 @@
 [project]
-name = "agent-inbox"
+name = "agent-mailbox"
 dynamic = ["version"]
-description = "A SQLite mailbox for local LLM agents — a CLI primitive plus a hostable MCP server so AI coding agents can message and notify each other. No external services."
+description = "A SQLite mailbox for local LLM agents — one HTTP API, an ActivityStreams messaging model, and a local stdio MCP server so AI coding agents can message each other. No external services."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "GPL-3.0-or-later" }
@@ -50,8 +50,9 @@ ui = [
 ]
 
 [project.scripts]
-agent-inbox = "agent_inbox.cli:main"
-agent-mail = "agent_inbox.cli:main"  # deprecated alias for the old command name
+# The new command arrives with M3. The superseded implementation keeps an entry point
+# only so the package remains importable as reference; it is deleted with the package.
+agent-mailbox-old = "agent_mailbox_old.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/salimfadhley/agent-inbox"
@@ -66,7 +67,7 @@ build-backend = "hatchling.build"
 source = "vcs"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/agent_inbox"]
+packages = ["src/agent_mailbox", "src/agent_mailbox_old"]
 
 [tool.hatch.build.targets.sdist]
 include = ["src", "tests", "docs", "README.md", "LICENSE"]
@@ -84,18 +85,24 @@ dev = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# tests/legacy holds the superseded package's suite — historical reference, not a gate.
 testpaths = ["tests"]
+norecursedirs = ["legacy"]
 addopts = "-q"
 
 [tool.ruff]
 line-length = 88
 target-version = "py312"
+# The superseded implementation is kept for reference only and is deleted once the new
+# system is green; linting code we are removing is waste (charter: Testing Standards).
+exclude = ["src/agent_mailbox_old", "tests/legacy"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B"]
 
 [tool.pyright]
 include = ["src"]
+exclude = ["src/agent_mailbox_old"]
 pythonVersion = "3.12"
 typeCheckingMode = "standard"
 venvPath = "."

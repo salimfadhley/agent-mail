@@ -29,10 +29,10 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs
 
-from agent_inbox.config import Config, format_address, hub_version, parse_target
-from agent_inbox.exceptions import AgentInboxError
-from agent_inbox.mailbox import Mailbox
-from agent_inbox.models import Message
+from agent_mailbox_old.config import Config, format_address, hub_version, parse_target
+from agent_mailbox_old.exceptions import AgentInboxError
+from agent_mailbox_old.mailbox import Mailbox
+from agent_mailbox_old.models import Message
 
 logger = logging.getLogger(__name__)
 
@@ -316,7 +316,7 @@ class WebConsole:
 
     async def _prompts(self, send: Send) -> None:
         """The prompt catalog, for humans: read it, and copy it out in one click."""
-        from agent_inbox.prompts import list_prompts, render_prompt, render_short
+        from agent_mailbox_old.prompts import list_prompts, render_prompt, render_short
 
         entries = []
         for meta in list_prompts():

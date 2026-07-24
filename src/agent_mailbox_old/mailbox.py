@@ -25,9 +25,9 @@ from types import TracebackType
 
 import aiosqlite
 
-from agent_inbox.config import Config, format_address, parse_address, parse_target
-from agent_inbox.exceptions import MailboxError
-from agent_inbox.models import AgentInfo, AgentProfile, Intent, Message
+from agent_mailbox_old.config import Config, format_address, parse_address, parse_target
+from agent_mailbox_old.exceptions import MailboxError
+from agent_mailbox_old.models import AgentInfo, AgentProfile, Intent, Message
 
 logger = logging.getLogger(__name__)
 

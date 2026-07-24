@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from agent_inbox.config import Config
-from agent_inbox.exceptions import ConfigError
-from agent_inbox.identity import (
+from agent_mailbox_old.config import Config
+from agent_mailbox_old.exceptions import ConfigError
+from agent_mailbox_old.identity import (
     reset_current_agent,
     resolve_identity,
     set_current_agent,
 )
-from agent_inbox.mcp_server import AgentIdentityMiddleware
+from agent_mailbox_old.mcp_server import AgentIdentityMiddleware
 
 
 def _config(project: str | None, agent: str | None) -> Config:

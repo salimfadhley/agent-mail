@@ -16,11 +16,11 @@ from uuid import uuid4
 
 import pytest_asyncio
 
-from agent_inbox.config import Config
-from agent_inbox.mailbox import FlowGraph, Mailbox
-from agent_inbox.mcp_server import AgentIdentityMiddleware
-from agent_inbox.models import AgentProfile, Message
-from agent_inbox.webui import WebConsole, has_ui, subject_or_snippet
+from agent_mailbox_old.config import Config
+from agent_mailbox_old.mailbox import FlowGraph, Mailbox
+from agent_mailbox_old.mcp_server import AgentIdentityMiddleware
+from agent_mailbox_old.models import AgentProfile, Message
+from agent_mailbox_old.webui import WebConsole, has_ui, subject_or_snippet
 
 
 @pytest_asyncio.fixture

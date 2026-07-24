@@ -8,8 +8,8 @@ from types import TracebackType
 import pytest
 from click.testing import CliRunner
 
-from agent_inbox import cli as cli_module
-from agent_inbox.models import Intent, Message
+from agent_mailbox_old import cli as cli_module
+from agent_mailbox_old.models import Intent, Message
 
 
 class FakeMailbox:

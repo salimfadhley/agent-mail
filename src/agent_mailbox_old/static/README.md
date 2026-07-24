@@ -1,7 +1,7 @@
 # Vendored static assets
 
 These files are served by the web console at `/ui/static/<name>` (see
-`agent_inbox.webui`). They are vendored (not fetched from a CDN) so the console is
+`agent_mailbox_old.webui`). They are vendored (not fetched from a CDN) so the console is
 fully self-contained and works on an offline LAN.
 
 ## vis-network.min.js
@@ -16,5 +16,5 @@ version note here in sync:
 
 ```
 curl -sL https://cdn.jsdelivr.net/npm/vis-network@<version>/standalone/umd/vis-network.min.js \
-  -o src/agent_inbox/static/vis-network.min.js
+  -o src/agent_mailbox_old/static/vis-network.min.js
 ```

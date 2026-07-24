@@ -1,6 +1,6 @@
 """FastMCP wrapper exposing the mailbox verbs as MCP tools.
 
-Every tool delegates to :class:`agent_inbox.mailbox.Mailbox` — the same core the CLI
+Every tool delegates to :class:`agent_mailbox_old.mailbox.Mailbox` — the same core the CLI
 uses — so there is no logic duplication.
 
 Two ways to run it:
@@ -28,21 +28,21 @@ from urllib.parse import parse_qs
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
-from agent_inbox.config import (
+from agent_mailbox_old.config import (
     Config,
     format_address,
     hub_descriptor,
     hub_version,
     parse_target,
 )
-from agent_inbox.identity import (
+from agent_mailbox_old.identity import (
     reset_current_agent,
     resolve_identity,
     set_current_agent,
 )
-from agent_inbox.mailbox import Mailbox
-from agent_inbox.models import AgentProfile, Intent, Message
-from agent_inbox.prompts import render_index, render_prompt
+from agent_mailbox_old.mailbox import Mailbox
+from agent_mailbox_old.models import AgentProfile, Intent, Message
+from agent_mailbox_old.prompts import render_index, render_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -596,7 +596,7 @@ def build_http_app(config: Config, max_message_bytes: int | None = None) -> ASGI
     hub_json = json.dumps(hub_descriptor(config, max_message_bytes)).encode()
     web: ASGIApp | None = None
     if config.ui:
-        from agent_inbox.webui import WebConsole
+        from agent_mailbox_old.webui import WebConsole
 
         web = WebConsole(config)
     return AgentIdentityMiddleware(

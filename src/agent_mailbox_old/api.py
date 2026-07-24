@@ -27,10 +27,10 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from agent_inbox.config import Config, format_address, hub_descriptor, parse_address
-from agent_inbox.exceptions import ConfigError, MailboxError
-from agent_inbox.mailbox import Mailbox, ThreadSummary, ThreadTurn
-from agent_inbox.models import AgentInfo, AgentProfile, Intent, Message
+from agent_mailbox_old.config import Config, format_address, hub_descriptor, parse_address
+from agent_mailbox_old.exceptions import ConfigError, MailboxError
+from agent_mailbox_old.mailbox import Mailbox, ThreadSummary, ThreadTurn
+from agent_mailbox_old.models import AgentInfo, AgentProfile, Intent, Message
 
 logger = logging.getLogger(__name__)
 

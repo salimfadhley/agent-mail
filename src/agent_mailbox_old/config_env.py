@@ -1,6 +1,6 @@
 """Locate the runtime ``--config`` TOML file.
 
-Kept separate from :mod:`agent_inbox.config` so the CLI can set the path before the
+Kept separate from :mod:`agent_mailbox_old.config` so the CLI can set the path before the
 settings model is built, without an import cycle or mutating ``os.environ``.
 """
 

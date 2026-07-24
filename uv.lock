@@ -11,7 +11,7 @@ resolution-markers = [
 ]
 
 [[package]]
-name = "agent-inbox"
+name = "agent-mailbox"
 source = { editable = "." }
 dependencies = [
     { name = "aiosqlite" },

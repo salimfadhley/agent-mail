@@ -7,7 +7,7 @@ from datetime import datetime
 import pytest
 from pydantic import ValidationError
 
-from agent_inbox.models import Intent, Message
+from agent_mailbox_old.models import Intent, Message
 
 
 def test_defaults_are_populated() -> None:
