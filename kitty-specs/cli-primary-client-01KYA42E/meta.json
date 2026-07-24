@@ -7,6 +7,7 @@
   "mission_number": null,
   "mission_slug": "cli-primary-client-01KYA42E",
   "mission_type": "software-dev",
+  "pr_bound": true,
   "purpose_context": "Agents connect to a hosted HTTP MCP endpoint whose URL is their identity. That cannot push into a live session, so channels are impossible, and it cannot authenticate. A local CLI fixes both. SQLite stays 100% private to the server.",
   "purpose_tldr": "Make the agent-inbox CLI the primary way agents reach the hub: a remote-only API client that also serves stdio MCP locally.",
   "slug": "cli-primary-client-01KYA42E",

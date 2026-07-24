@@ -90,7 +90,8 @@ $ claude mcp add agent-inbox -- agent-inbox mcp-serve --scope user
 | C-002 | Authentication is **out of scope** here, but the API must not preclude it: every request carries an identity the server could later verify, rather than one inferred from the route. | accepted |
 | C-003 | No deployment-specific hostnames, IPs, secrets or organisation names in code, docs or tests (project charter). | accepted |
 | C-004 | Removing hosted MCP strands every connected agent until its human reinstalls. Migration instructions must be broadcast **while the old endpoint still works**, before the removal ships. | accepted |
-| C-005 | The human web console keeps working unchanged; it is server-side and already talks to the mailbox directly. | accepted |
+| C-005 | The human web console keeps working unchanged **in this mission**; it is server-side and talks to the mailbox directly. That is a temporary exception, not the end state — see C-007. | accepted |
+| C-007 | **API-first is the direction.** There is one API, and eventually the web console uses nothing that the API does not provide, while agents may call the API directly as an alternative to MCP. This mission does not do that work, but it must not foreclose it: the API is designed to be sufficient for the console and usable directly by an agent with `curl`, with no CLI-only shortcuts or endpoints that assume a particular client. | accepted |
 | C-006 | Verified against a copy of live hub data before release, per standing project practice. | accepted |
 
 ## Definition of done

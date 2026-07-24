@@ -62,7 +62,27 @@ Today identity is the URL path, which is why nothing can verify it. The API take
 caller's address in a request header, so the auth mission can add a credential alongside
 it without moving anything (C-002). Routes become flat: `/api/v1/<resource>`.
 
-### D4 — Removal is a flag day, announced in advance
+### D4 — Build it API-first, even though the console conversion is a later mission
+
+The owner's direction is **one API, API-first**: eventually the web console consumes only
+what the API offers, and agents may call the API directly instead of going through MCP.
+This mission does not convert the console, but it decides the API's shape, so it is bound
+by that future:
+
+- **No client-specific endpoints.** Nothing exists because "the CLI needs it"; every route
+  is a plain resource operation any client could use.
+- **The API must cover what the console does today**, including its read-only observation
+  paths — otherwise the conversion mission would have to widen the API immediately.
+- **Directly usable by hand.** An agent with `curl` and the OpenAPI schema can send and
+  read mail without the CLI. This is a design test to apply to each endpoint, and it is
+  also the fallback if the CLI is unavailable.
+
+The corollary worth stating: `Mailbox.thread()` is omniscient and backs the console
+(mission 0020). It must **not** get an API route as-is. The console's needs and an agent's
+needs differ here, and API-first means resolving that deliberately in the conversion
+mission, not exposing the omniscient view by accident now.
+
+### D5 — Removal is a flag day, announced in advance
 
 Hosted MCP disappears in the same release that ships the API. The mitigation is
 sequencing, not compatibility: broadcast migration instructions **while the old endpoint
@@ -128,9 +148,10 @@ Four groups; the first two are independent and can run in parallel.
 | Risk | Answer |
 |---|---|
 | Rewriting 13 commands silently changes behaviour | Tool names and result shapes are frozen; only transport changes. Existing CLI tests are rewritten against a stub hub, not deleted. |
-| Agents stranded by the removal | D4 — announce while the old path works, then cut. |
+| Agents stranded by the removal | D5 — announce while the old path works, then cut. |
 | The proxy drifts from the server | D2 — the proxy may not make decisions. |
 | Scope creep into authentication | Explicitly out of scope; D3 only reserves the seam. |
+| API shaped around the CLI, blocking the console conversion | D4 — no client-specific endpoints; every route usable by hand. |
 
 ## Open questions
 

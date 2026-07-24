@@ -31,13 +31,14 @@ rather than being absorbed into whatever feature surfaced them.
 | [0011](0011-three-part-surfaces.md) | Three-part names everywhere | `<project>/<agent>/<role>` through every surface | ✅ v0.8.0 |
 | [0012](0012-renames-and-simpler-routing.md) | Renames + retire `any` | Rename with forwarding; one delivery mode | ✅ v0.10.0 |
 | [0013](0013-friction-tidy-up.md) | Friction backlog | 7 reported/found bugs, each reproduced | ✅ v0.9.0 |
-| [0014](0014-fallback-cli.md) | Fallback CLI | Teach the CLI to reach the hub; `agent-inbox.toml` | **unblocked, next** |
+| [0014](0014-fallback-cli.md) | ~~Fallback CLI~~ | **Superseded** — the CLI became the *primary* client; see `kitty-specs/cli-primary-client-01KYA42E` | 🔁 superseded |
 | [0015](0015-public-notices.md) | Messages = notices | One item, two axes: audience (`to`) + attachment (`parent`) | 📐 design settled |
 | [0016](0016-gc-decapitates-threads.md) | GC decapitates threads | TTL purges live conversations' roots | ✅ v0.10.1 |
 | [0017](0017-channels-push.md) | Channels — push into a live session | Protocol-level push; may supersede the wake hook | planned |
 | [0018](0018-spec-kitty-adoption.md) | Adopt spec-kitty properly | Finish the port, review panels, merge discipline | planned |
 | [0019](0019-reclone-under-correct-name.md) | Re-clone under the right name | Working copy still says `agent-mail` | planned |
 | [0020](0020-thread-membership-leak.md) | `read_thread` leaks private mail | Party to one turn = read every turn | ✅ v0.10.2 |
+| [0021](0021-api-first-console.md) | API-first console | One API; the console becomes an ordinary client | planned |
 
 **0001 (Elasticsearch audit log) was dropped:** with SQLite the `messages` table is already
 the durable, queryable history — see [ADR 0002](../decisions/0002-sqlite-backend.md).
