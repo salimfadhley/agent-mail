@@ -102,6 +102,7 @@ class House:
         subject: str | None = None,
         cc: Sequence[str] = (),
         in_reply_to: str | None = None,
+        document: dict[str, object] | None = None,
     ) -> ObjectRecord:
         recipients = (to,) if isinstance(to, str) else tuple(to)
         attempt = Attempt(
@@ -114,7 +115,13 @@ class House:
         await self._check(attempt)
         try:
             sent = await self._mailbox.send(
-                caller, to, body, subject=subject, cc=cc, in_reply_to=in_reply_to
+                caller,
+                to,
+                body,
+                subject=subject,
+                cc=cc,
+                in_reply_to=in_reply_to,
+                document=document,
             )
         except Exception as exc:
             await self._record(Outcome(attempt, ok=False, error=exc))

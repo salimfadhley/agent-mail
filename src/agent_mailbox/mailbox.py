@@ -171,6 +171,7 @@ class Mailbox:
         subject: str | None = None,
         cc: Sequence[str] = (),
         in_reply_to: str | None = None,
+        document: dict[str, object] | None = None,
     ) -> ObjectRecord:
         """Send a message. Every actor addressed receives their own copy.
 
@@ -223,7 +224,9 @@ class Mailbox:
             published=self._now(),
             # What was typed, kept for display and provenance. AS2 has `audience` for
             # exactly this: `to` is who it went to, `audience` is who it was aimed at.
-            document={"audience": list(recipients + copies)},
+            # `audience` is what was typed; anything else is a property we do not
+            # model and are required to preserve (ADR 0006).
+            document={"audience": list(recipients + copies), **(document or {})},
         )
         await self._store.add_object(obj)
         return obj

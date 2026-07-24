@@ -93,14 +93,31 @@ src/agent_mailbox/
 └── serve.py       # NEW — uvicorn entrypoint and configuration
 ```
 
-## Phasing
+## Phasing — ship early, ship often
 
-1. **Wire + errors** — the AS2 structs, the mapping, the status table. No HTTP yet.
-2. **Routes** — actors, inbox, outbox, objects, thread, directory, hub, health.
-3. **Observation** — the operator's views, loopback-bound.
-4. **Review #1** — outside review of the surface, before anything depends on it.
-5. **Ship** — container, deploy to the homelab beside the old hub, live request.
-6. **Review #2** — outside review at close.
+Owner's instruction: *"I want lots of incremental releases so I can manually test the
+live system."* So deployment is not the last step; it is the **first**, and then every
+step.
+
+This is also better engineering than the alternative. Container, port, volume and
+networking problems are cheap to find against three routes and expensive to find against
+fourteen — and a deployment that has worked twenty times is not a risk by the twentieth.
+
+Each increment is independently deployable and independently pokeable with `curl`.
+
+| # | Ships | Testable by hand |
+|---|---|---|
+| 1 | hub descriptor, health, container, homelab deploy | `GET /` and `/health` answer from the homelab |
+| 2 | join, directory, actor document | create an actor and read it back |
+| 3 | outbox, inbox | send a message and see it waiting |
+| 4 | read, view, thread | consume it, and see the conversation |
+| 5 | observation routes | watch a mailbox without consuming it |
+| 6 | AS2 profile doc, OpenAPI | read what the hub accepts |
+
+**Review #1** goes after increment 3 — the surface exists, nothing depends on it yet, and
+changing a route is still free. **Review #2** before the mission closes.
+
+Version bumps are cheap and the tags are the record: each increment is a release.
 
 ## Risks
 

@@ -7,6 +7,7 @@
   "mission_number": null,
   "mission_slug": "the-api-01KYADKK",
   "mission_type": "software-dev",
+  "pr_bound": true,
   "purpose_context": "Binding: ADR 0004 (AS2 vocabulary), ADR 0005 (one API, every client is a client, no proxies), ADR 0007 (identity is an argument; authentication is the edge's job and is deferred), ADR 0008 (no actor has authority), ADR 0009 (Litestar and msgspec). Includes the operator's observation routes, built now and secured later. Definition of done includes deployment to the homelab alongside the untouched old hub.",
   "purpose_tldr": "The hub's one machine interface: ActivityStreams on the wire, ActivityPub's route shape, over the House. Live on the homelab beside the old hub.",
   "slug": "the-api-01KYADKK",
