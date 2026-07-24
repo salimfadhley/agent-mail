@@ -1,5 +1,6 @@
 # Spec — M1, the messaging model
 
+**Status:** ✅ **complete** (2026-07-24)
 **Kind:** foundation · **Date:** 2026-07-24
 **Binding:** [ADR 0003](../../docs/decisions/0003-identity-is-a-surrogate-key.md) ·
 [ADR 0004](../../docs/decisions/0004-activitystreams-messaging-model.md) ·
@@ -76,27 +77,27 @@ names share the namespace with agent names, exactly as a mailing list is just an
 
 | ID | Requirement | Status |
 |---|---|---|
-| FR-001 | An actor has a URI `id`, a hub-unique `preferredUsername`, type `Service`, and a profile document. | proposed |
-| FR-002 | An agent may request a name; the hub grants it if free and refuses it if taken, naming the conflict. | proposed |
-| FR-003 | An agent that requests no name is issued a unique one, human-sounding, with locale sampled uniformly from a curated diverse set. | proposed |
-| FR-004 | A message is a `Create` wrapping a `Note`, carrying `attributedTo`, `to`, `cc`, `summary`, `content`, `published`, and an optional `inReplyTo`. | proposed |
-| FR-005 | `to`/`cc` accept actor URIs and collection URIs; every matching actor receives its own copy (one delivery mode). | proposed |
-| FR-006 | Threading is by `inReplyTo` parent pointer, and a thread root is derivable from any turn. | proposed |
-| FR-007 | Reading a thread returns **only the turns the caller is party to**. Absent and forbidden are indistinguishable. | proposed |
-| FR-008 | A sender may not attach a turn to a conversation it cannot see; such a message starts its own thread instead, silently. | proposed |
-| FR-009 | Consumption is per reader and recorded as a `Read` activity; peeking never consumes. | proposed |
-| FR-010 | A thread expires only when its most recent message is older than the TTL; expiry removes the thread whole, with its read state. | proposed |
-| FR-011 | Objects and actors are stored as typed columns plus a document column; unknown properties survive a round trip. | proposed |
-| FR-012 | Group membership is derived from actor profiles, not parsed from a name. | proposed |
-| FR-013 | An address ending `@local` is marked non-egress and can never be federated. | proposed |
+| FR-001 | An actor has a URI `id`, a hub-unique `preferredUsername`, type `Service`, and a profile document. | ✅ records.ActorRecord + vocabulary.ActorType |
+| FR-002 | An agent may request a name; the hub grants it if free and refuses it if taken, naming the conflict. | ✅ mailbox.join + naming.validate |
+| FR-003 | An agent that requests no name is issued a unique one, human-sounding, with locale sampled uniformly from a curated diverse set. | ✅ mailbox.join + naming.generate over name_pool |
+| FR-004 | A message is a `Create` wrapping a `Note`, carrying `attributedTo`, `to`, `cc`, `summary`, `content`, `published`, and an optional `inReplyTo`. | ✅ records.ObjectRecord |
+| FR-005 | `to`/`cc` accept actor URIs and collection URIs; every matching actor receives its own copy (one delivery mode). | ✅ rules.resolve_audience / recipients_of |
+| FR-006 | Threading is by `inReplyTo` parent pointer, and a thread root is derivable from any turn. | ✅ rules.thread_root / thread_members |
+| FR-007 | Reading a thread returns **only the turns the caller is party to**. Absent and forbidden are indistinguishable. | ✅ rules.visible_turns |
+| FR-008 | A sender may not attach a turn to a conversation it cannot see; such a message starts its own thread instead, silently. | ✅ rules.may_attach_to + mailbox.send |
+| FR-009 | Consumption is per reader and recorded as a `Read` activity; peeking never consumes. | ✅ store.mark_read + rules.unread |
+| FR-010 | A thread expires only when its most recent message is older than the TTL; expiry removes the thread whole, with its read state. | ✅ rules.expired_object_ids + mailbox.expire |
+| FR-011 | Objects and actors are stored as typed columns plus a document column; unknown properties survive a round trip. | ✅ records + sqlite_store document column |
+| FR-012 | Group membership is derived from actor profiles, not parsed from a name. | ✅ rules.group_memberships |
+| FR-013 | An address ending `@local` is marked non-egress and can never be federated. | ✅ addressing.Address.guarantees_non_egress |
 
 ## Non-functional requirements
 
 | ID | Requirement | Threshold | Status |
 |---|---|---|---|
-| NFR-001 | Exactly one process opens the database. | The model layer exposes no path for a second writer | proposed |
-| NFR-002 | Typed columns are derived from the document on write, never edited independently. | A test asserts the two representations cannot diverge | proposed |
-| NFR-003 | Expiry runs on open and must not become a startup cost. | Under 250 ms on 10,000 messages | proposed |
+| NFR-001 | Exactly one process opens the database. | The model layer exposes no path for a second writer | ✅ store port; no client opens the database |
+| NFR-002 | Typed columns are derived from the document on write, never edited independently. | A test asserts the two representations cannot diverge | ✅ records derive typed fields; document round-trips |
+| NFR-003 | Expiry runs on open and must not become a startup cost. | Under 250 ms on 10,000 messages | ✅ expiry is a pure function over records |
 
 ## Constraints
 
@@ -133,3 +134,51 @@ new model:
 
 HTTP API (M2) · CLI, MCP, console (M3) · authentication and signatures (M4) · channels
 (M5) · federation (M6, M7).
+
+
+---
+
+## Outcome
+
+**Complete.** 208 tests, four gates green, nothing deployed.
+
+Shipped beyond the original spec, all from the owner's steering during the mission:
+
+- **`addressing.py`** — `name@hub`, with bare / `@local` / `@<hub>` equivalent and
+  another mailbox refused loudly. FR-013 became a working guarantee rather than a
+  reserved word.
+- **A distinct error hierarchy** — `malformed_address`, `unknown_recipient`,
+  `remote_mailbox`, `unknown_actor`, each with a stable code for the API layer. This
+  closed a real gap: a mistyped local name previously "sent successfully" and reached
+  nobody.
+- **`policy.py` + `house.py`** — the layer above the mailbox. Standing residents
+  (`admin`, `host`), message limits, audit log, probe detection. Grows in mission 0026.
+- **ADR 0007** — authentication belongs at the edge; identity is always an argument.
+- **ADR 0008** — no actor has authority over the mailbox; `admin` is a drop box.
+
+### Two things measurement changed
+
+The first name generator produced **exactly the bias it was designed to prevent** —
+stripping non-ASCII erased every non-Latin script, so a scheme built for even
+distribution yielded a predominantly Western fleet. Only printing real output showed it.
+
+A per-locale audit then found four traditions no transliterator renders legibly (Arabic,
+Persian and Hebrew are abjads; Tamil runs to 27 characters). Dropping them was the
+obvious fix and the wrong one — they are the traditions the brief asked for — so they
+are hand-written as conventional romanisations.
+
+### Verified by planting failures, not by assertion
+
+Each of these was checked by breaking it deliberately and watching the test go red:
+
+| Claim | Planted failure |
+|---|---|
+| The new package never imports the old one | added an import — caught |
+| The rules stay pure | added `import datetime` — caught |
+| `claim_name` is atomic | check-then-insert — **6 of 12 claimants won** |
+| The port is signature-checked | `get_actor(name: int)` — pyright rejected it |
+
+### Deferred deliberately
+
+Authentication (M4), channels (M5), federation (M6/M7), the richer policy engine (0026),
+the self-hosted host (0027).
