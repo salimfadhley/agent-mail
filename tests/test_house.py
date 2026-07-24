@@ -47,8 +47,52 @@ class TestStandingResidents:
         admin = await house.whois(ADMIN)
         host = await house.whois(HOST)
         assert admin is not None and host is not None
-        assert "broken" in admin.profile["purpose"]
+        assert "postbox" in admin.profile["purpose"]
         assert "Introductions" in host.profile["purpose"]
+
+    async def test_the_host_is_the_front_door_and_admin_is_not(
+        self, house: House
+    ) -> None:
+        """Reports flow agents -> host -> admin (ADR 0008).
+
+        The indirection earns its place: agents talk to the host anyway, because it
+        introduces them, so friction reaches it without anyone needing to know a
+        reporting address exists. admin is the developers' drop box at the end of that
+        chain, and most agents should never write there.
+        """
+        host = await house.whois(HOST)
+        admin = await house.whois(ADMIN)
+        assert host is not None and admin is not None
+
+        assert "Start here" in host.profile["purpose"]
+        assert "passes them on" in host.profile["purpose"]
+        assert "developers" in admin.profile["purpose"]
+        assert "by way of the host" in admin.profile["purpose"]
+
+    async def test_the_direct_channel_to_admin_is_guaranteed(
+        self, house: House
+    ) -> None:
+        """Reserving the name is what makes the channel dependable.
+
+        Whatever else changes, an agent can raise a concern about how the mailbox
+        operates — at an address nobody can squat, which does not depend on anyone
+        being on duty. Host is the convenient path; direct is the guaranteed one.
+        """
+        await house.join(ROSEMARY)
+        sent = await house.send(ROSEMARY, ADMIN, "expiry deleted a live thread")
+        assert [m.id for m in await house.peek(ADMIN)] == [sent.id]
+
+        admin = await house.whois(ADMIN)
+        assert admin is not None
+        assert "always" in admin.profile["purpose"]
+
+    async def test_neither_standing_name_claims_authority(self, house: House) -> None:
+        """The profile an agent reads must not imply admin can act for it."""
+        admin = await house.whois(ADMIN)
+        assert admin is not None
+        purpose = admin.profile["purpose"]
+        assert "not an office" in purpose
+        assert "cannot change anything on your behalf" in purpose
 
     async def test_mail_to_an_absent_admin_waits_rather_than_failing(
         self, house: House

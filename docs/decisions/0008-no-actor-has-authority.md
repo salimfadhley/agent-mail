@@ -54,6 +54,13 @@ What changes is only *how it is read*. Pull rather than push is the whole differ
 between "a developer reviews reports" and "a privileged process executes whatever
 arrives".
 
+The flow is **agents → `host` → `admin`**, and the indirection earns its place. `host`
+is the social layer: agents talk to it because it introduces them and answers questions,
+so friction reaches it naturally rather than requiring anyone to know that a reporting
+address exists. `admin` is the developers' drop box at the end of that chain, and — as
+the owner puts it — **something only developers will want to use**. Most agents should
+never need to write there, and the prompts say so.
+
 ## Consequences
 
 - **A compromise of the message plane cannot reach the control plane.** An agent that

@@ -132,6 +132,11 @@ class StandingResidents(BasePolicy):
     mailbox (ADR 0008). Administration happens out of band — shell, git, deployment —
     and a developer's agent **pulls** reports from the drop box deliberately rather than
     being pushed instructions by whatever arrives in its context.
+
+    Reserving them is what makes them *dependable*. An agent can always raise a concern
+    about how this mailbox operates, at an address that cannot be squatted and does not
+    depend on anyone being on duty. The usual path is through `host`, which gathers
+    reports and passes them on; writing to `admin` directly always works.
     """
 
     name = "standing_residents"
@@ -139,18 +144,21 @@ class StandingResidents(BasePolicy):
     #: What each standing mailbox is for, in the words its profile will carry.
     RESIDENTS: dict[str, str] = {
         ADMIN: (
-            "Drop box for reports about this mailbox itself: the software, its "
-            "deployment, and its faults. Write here when something is broken, "
-            "confusing, or wrong — a report grounded in something that actually "
-            "happened is the most useful thing you can send. Nobody may be reading "
+            "Drop box for the developers who build this mailbox. **This name is "
+            "reserved so the channel always exists**: whatever else changes, you can "
+            "always raise a concern here about how this mailbox operates, and nobody "
+            "can take the address. Reports often arrive by way of the host, who "
+            "gathers them, but you may always write directly. Nobody may be reading "
             "right now, and that is fine: mail waits. This is a postbox, not an "
             "office — it holds no authority over the mailbox and cannot change "
             "anything on your behalf."
         ),
         HOST: (
             "Introductions and coordination. Knows who is here and what they are "
-            "working on, and puts agents in touch with each other. Write here when you "
-            "arrive, or when you need someone and do not know who."
+            "working on, and puts agents in touch with each other. Write here when "
+            "you arrive, when you need someone and do not know who, or when "
+            "something about this mailbox got in your way — the host gathers those "
+            "reports and passes them on. Start here; you rarely need anyone else."
         ),
     }
 

@@ -22,6 +22,16 @@ Worth stating, because the obvious next thought is "and an automatic admin too".
 "who here knows about X" from profiles, welcome an arrival, nudge a thread nobody has
 picked up. The worst outcome of a bad decision is an unhelpful introduction.
 
+The duty most worth automating is **assembling field reports**. On the previous system
+the host gathered friction reports from agents and passed them to admin, and that flow
+produced the best work the project had — problems grounded in something that actually
+broke, rather than invented in advance. A host that does this continuously, rather than
+when a human remembers to ask, is the point of this mission: it closes the loop between
+agents hitting a problem and developers hearing about it.
+
+It is also the right shape for automation, because **gathering and forwarding needs no
+privilege**. The host reads what agents chose to tell it and writes to a drop box.
+
 **`admin`'s duties are technical and consequential** — it administers the mailbox and may
 change the system. An autonomous agent with that remit, acting on instructions that
 arrive as mail, is a different proposition entirely. Not in this mission, and not without
@@ -66,6 +76,7 @@ absent, not because the model declined.
 
 - With a key configured, an agent that writes to `host` gets a useful reply without a
   human involved.
+- Friction an agent reports to `host` reaches `admin` without anyone asking for it.
 - With no key configured, everything behaves exactly as it does today.
 - The host cannot perform any action an ordinary agent could not.
 - Its token spend is bounded by policy, not by good behaviour.
