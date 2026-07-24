@@ -37,7 +37,7 @@ rather than being absorbed into whatever feature surfaced them.
 | [0017](0017-channels-push.md) | Channels — push into a live session | Protocol-level push; may supersede the wake hook | planned |
 | [0018](0018-spec-kitty-adoption.md) | Adopt spec-kitty properly | Finish the port, review panels, merge discipline | planned |
 | [0019](0019-reclone-under-correct-name.md) | Re-clone under the right name | Working copy still says `agent-mail` | planned |
-| [0020](0020-thread-membership-leak.md) | `read_thread` leaks private mail | Party to one turn = read every turn | 🔴 **fix first** |
+| [0020](0020-thread-membership-leak.md) | `read_thread` leaks private mail | Party to one turn = read every turn | ✅ v0.10.2 |
 
 **0001 (Elasticsearch audit log) was dropped:** with SQLite the `messages` table is already
 the durable, queryable history — see [ADR 0002](../decisions/0002-sqlite-backend.md).

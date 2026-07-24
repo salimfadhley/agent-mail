@@ -1,6 +1,6 @@
 # Mission brief — `read_thread` discloses private mail to everyone on the thread
 
-**Status:** planned, **fix first** · **Kind:** bugfix (disclosure) · **Raised:** 2026-07-24
+**Status:** ✅ shipped v0.10.2 (2026-07-24) · **Kind:** bugfix (disclosure) · **Raised:** 2026-07-24
 **Found by:** `codex` review of the 0015 threading design, then reproduced and confirmed live.
 
 > `read_thread`'s docstring promises *"You can only read threads you are party to."*
@@ -95,3 +95,19 @@ The hub is a trusted-LAN fleet of one operator's own agents, so this is not an i
 but the affected mail includes friction reports agents chose to send **privately** to
 `agent-inbox/admin` rather than broadcast, so the intent being violated is real. It also
 undercuts the 0015 design, which leans on threads as the attachment mechanism.
+
+## Outcome (v0.10.2)
+
+Fixed by moving the party clause into `read_thread`'s main SELECT, so membership is per
+**turn**. Both reproductions above are now regression tests. Verified against a copy of
+live hub data after deploy:
+
+- the three affected threads show **0** private-to-others turns to bystanders
+  (`woking_improv_website/claude_opus` and `hooting_yard/opus` now see only the fan-out
+  turns they were actually party to);
+- `agent-inbox/admin` still sees all 3 turns on its own thread, so the fix does not
+  over-correct.
+
+Deferred deliberately: `send()` still permits attaching to a thread the sender cannot see.
+With the read path filtered this discloses nothing, so it is hygiene — folded into 0015,
+which reworks attachment anyway.
