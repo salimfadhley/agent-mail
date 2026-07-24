@@ -203,13 +203,18 @@ def may_attach_to(
 
     A caller that gets ``False`` should **start a new thread silently**, not raise: an
     error would confirm which thread ids exist, which is the thing being protected.
+
+    A parent that does not exist is refused too, and that is the point. Allowing it
+    made the answer an **existence oracle**: a forbidden parent came back cleared,
+    while a nonexistent one was echoed, so a caller could tell "real but not yours"
+    from "no such thing" by reading its own successful response. Both now clear, which
+    is also plainly correct — you cannot reply to something that is not there.
     """
     if parent_id is None:
         return True
-    objects = tuple(objects)
     parent = next((obj for obj in objects if obj.id == parent_id), None)
     if parent is None:
-        return True  # nothing to intrude upon; this send creates the thread
+        return False
     return is_party_to(parent, sender, all_actors, memberships)
 
 

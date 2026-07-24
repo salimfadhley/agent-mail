@@ -306,3 +306,135 @@ class TestNoLogicHere:
         source = Path(api_module.__file__).read_text()
         assert "ObjectRecord(" not in source
         assert "ActorRecord(" not in source
+
+
+class TestReviewFindings:
+    """Six defects found by outside review of this mission. Each has its shape here.
+
+    All were invisible to a green test suite, because the tests were written by
+    whoever wrote the routes — which is the argument for the review gate.
+    """
+
+    def test_the_path_owner_is_not_a_decoration(self, client: TestClient) -> None:
+        """`/actors/alice/inbox` with Bob's header returned *Bob's* inbox, and a 200.
+
+        The URL's owner meant nothing, and an authentication layer checking the path
+        would have been checking nothing.
+        """
+        join(client, ROSEMARY)
+        join(client, TREVOR)
+        assert (
+            client.get(f"/actors/{ROSEMARY}/inbox", headers=as_(TREVOR)).status_code
+            == 403
+        )
+        assert (
+            client.get(f"/actors/{TREVOR}/inbox", headers=as_(TREVOR)).status_code
+            == 200
+        )
+
+    def test_you_cannot_post_as_somebody_else_via_the_path(
+        self, client: TestClient
+    ) -> None:
+        join(client, ROSEMARY)
+        join(client, TREVOR)
+        r = client.post(
+            f"/actors/{ROSEMARY}/outbox",
+            json=note([TREVOR], "not mine to send"),
+            headers=as_(TREVOR),
+        )
+        assert r.status_code == 403
+
+    def test_a_foreign_uri_stays_foreign(self, client: TestClient) -> None:
+        """It used to be stripped to its last segment and delivered locally.
+
+        `https://remote.example/actors/everyone` became a broadcast to this fleet.
+        """
+        join(client, ROSEMARY)
+        join(client, TREVOR)
+        r = client.post(
+            f"/actors/{ROSEMARY}/outbox",
+            json=note(["https://remote.example/actors/everyone"], "meant for a peer"),
+            headers=as_(ROSEMARY),
+        )
+        assert r.status_code == 422
+        assert r.json()["code"] == "remote_mailbox"
+        assert (
+            client.get(f"/actors/{TREVOR}/inbox", headers=as_(TREVOR)).json()[
+                "totalItems"
+            ]
+            == 0
+        )
+
+    def test_in_reply_to_is_not_an_existence_oracle(self, client: TestClient) -> None:
+        """A forbidden parent came back cleared; a nonexistent one was echoed.
+
+        So a caller could tell "real but not yours" from "no such thing" by reading
+        its own successful response — the probe refused everywhere else.
+        """
+        for who in (ROSEMARY, TREVOR, YITZHAK):
+            join(client, who)
+        private = client.post(
+            f"/actors/{ROSEMARY}/outbox",
+            json=note([TREVOR], "private"),
+            headers=as_(ROSEMARY),
+        ).json()
+
+        forbidden = client.post(
+            f"/actors/{YITZHAK}/outbox",
+            json=note([TREVOR], "x", inReplyTo=private["id"]),
+            headers=as_(YITZHAK),
+        ).json()
+        absent = client.post(
+            f"/actors/{YITZHAK}/outbox",
+            json=note([TREVOR], "x", inReplyTo=f"{HUB}/objects/never-existed"),
+            headers=as_(YITZHAK),
+        ).json()
+        assert forbidden["inReplyTo"] == absent["inReplyTo"] is None
+
+    def test_a_bare_in_reply_to_is_a_real_reply(self, client: TestClient) -> None:
+        """It used to return 201 with `to: []` and reach nobody — silent success."""
+        join(client, ROSEMARY)
+        join(client, TREVOR)
+        original = client.post(
+            f"/actors/{ROSEMARY}/outbox",
+            json=note([TREVOR], "q", summary="flaky"),
+            headers=as_(ROSEMARY),
+        ).json()
+
+        reply = client.post(
+            f"/actors/{TREVOR}/outbox",
+            json={"type": "Note", "content": "a", "inReplyTo": original["id"]},
+            headers=as_(TREVOR),
+        ).json()
+
+        assert reply["to"] == [f"{HUB}/actors/{ROSEMARY}"]
+        assert reply["summary"] == "Re: flaky"
+        assert (
+            client.get(f"/actors/{ROSEMARY}/inbox", headers=as_(ROSEMARY)).json()[
+                "totalItems"
+            ]
+            == 1
+        )
+
+    def test_what_was_stored_is_what_comes_back(self, client: TestClient) -> None:
+        """Audience and unknown properties were kept and then not returned."""
+        join(client, ROSEMARY)
+        join(client, TREVOR)
+        body = {
+            "type": "Create",
+            "x:onTheActivity": "kept",
+            "object": {
+                "type": "Note",
+                "to": ["everyone"],
+                "content": "hi",
+                "x:mood": "cheerful",
+            },
+        }
+        sent = client.post(
+            f"/actors/{ROSEMARY}/outbox", json=body, headers=as_(ROSEMARY)
+        ).json()
+        assert sent["audience"] == ["everyone"]
+        assert sent["extra"]["x:mood"] == "cheerful"
+        assert sent["extra"]["x:onTheActivity"] == "kept", (
+            "properties on the Create were dropped before storage"
+        )

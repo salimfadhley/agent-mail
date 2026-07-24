@@ -60,6 +60,27 @@ def caller_name(request: Request) -> str:
     return value
 
 
+def owns(name: str, caller: str, wire: Renderer) -> str:
+    """Check that the caller is who the path says, or refuse.
+
+    An earlier version accepted the path parameter and quietly ignored it, so
+    ``GET /actors/alice/inbox`` with a header of ``bob`` returned *Bob's* inbox and a
+    cheerful 200. That made the URL's owner meaningless, and would have laid a trap for
+    authentication: an edge or middleware checking the path would have been checking
+    nothing at all.
+    """
+    wanted = wire.name_from(name)
+    if wanted != caller:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"this is {wanted}'s mailbox and you are {caller} — "
+                f"use /actors/{caller}/… for your own"
+            ),
+        )
+    return caller
+
+
 class Api:
     """Routes over a house. Holds the house and the renderer; decides nothing."""
 
@@ -117,6 +138,7 @@ class Api:
     async def update_profile(
         self, name: str, data: dict[str, Any], caller: str
     ) -> Actor:
+        owns(name, caller, self.wire)
         profile = data.get("profile", data)
         record = await self.house.update_profile(caller, dict(profile))
         return self.wire.actor(record)
@@ -124,9 +146,23 @@ class Api:
     # -- mail --------------------------------------------------------------
 
     async def outbox(self, name: str, request: Request, caller: str) -> Note:
+        owns(name, caller, self.wire)
         raw: dict[str, Any] = await request.json()
         activity = decode_activity(raw)
         note = activity.object
+
+        parent = (
+            self.wire.object_id_from(note.in_reply_to) if note.in_reply_to else None
+        )
+        if parent and not note.to and not note.cc:
+            # A note with a parent and no recipients *is* a reply. Sending it as-is
+            # would return 201 and reach nobody — a silent success, which is the worst
+            # failure shape we have. House.reply addresses the original sender and
+            # adds the `Re:` subject.
+            replied = await self.house.reply(
+                caller, parent, note.content, subject=note.summary
+            )
+            return self.wire.note(replied)
 
         sent = await self.house.send(
             caller,
@@ -134,15 +170,14 @@ class Api:
             note.content,
             subject=note.summary,
             cc=self.wire.recipients(note.cc),
-            in_reply_to=(
-                self.wire.object_id_from(note.in_reply_to) if note.in_reply_to else None
-            ),
+            in_reply_to=parent,
             # Whatever this document carried that we do not model, kept verbatim.
             document=unknown_properties(raw) or None,
         )
         return self.wire.note(sent)
 
     async def inbox(self, name: str, caller: str) -> Collection:
+        owns(name, caller, self.wire)
         waiting = await self.house.peek(caller)
         return self.wire.collection([self.wire.note(m) for m in waiting])
 
@@ -151,7 +186,7 @@ class Api:
         return self.wire.note(got)
 
     async def view_object(self, object_id: str, caller: str) -> Note:
-        got = await self.house.mailbox.view(caller, self.wire.object_id_from(object_id))
+        got = await self.house.view(caller, self.wire.object_id_from(object_id))
         return self.wire.note(got)
 
     async def thread(self, object_id: str, caller: str) -> Collection:

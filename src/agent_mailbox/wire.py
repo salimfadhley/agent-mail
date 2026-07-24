@@ -62,6 +62,11 @@ class Note(
     content: str = ""
     in_reply_to: str | None = None
     published: str | None = None
+    #: What the sender addressed, before groups were resolved — AS2 has `audience`
+    #: for exactly this, and `to` holds who actually received it.
+    audience: list[str] | None = None
+    #: Properties we do not model, carried through untouched.
+    extra: dict[str, Any] = {}
 
 
 class Create(msgspec.Struct, rename={"context": "@context"}):
@@ -122,19 +127,29 @@ class Renderer:
         return f"{self.base}/objects/{object_id}"
 
     def name_from(self, value: str) -> str:
-        """Accept either a bare name or one of our actor URIs.
+        """Accept a bare name, or one of *our* actor URIs.
 
-        Tolerant on the way in because clients are written by other people — and
-        because an agent that has read an actor document will naturally send the URI
-        back. Rejecting that would be pedantry.
+        A URI belonging to another host is **kept foreign** — turned into
+        ``name@thathost`` so that addressing refuses it as a remote mailbox.
+
+        An earlier version stripped any URI to its last path segment, in the name of
+        being tolerant. That was a misdelivery bug, not tolerance: mail addressed to
+        ``https://remote.example/actors/bob`` was quietly handed to the local ``bob``,
+        and ``https://remote.example/actors/everyone`` became a broadcast to this
+        entire fleet. Being generous about *our own* URIs is helpful; reinterpreting
+        somebody else's address is not.
         """
         text = value.strip()
         prefix = f"{self.base}/actors/"
         if text.startswith(prefix):
             return text[len(prefix) :].strip("/")
         if "://" in text:
-            # someone else's URI: keep the last segment and let addressing refuse it
-            return text.rstrip("/").rsplit("/", 1)[-1]
+            from urllib.parse import urlparse
+
+            parsed = urlparse(text)
+            leaf = parsed.path.rstrip("/").rsplit("/", 1)[-1]
+            host = parsed.netloc.split(":")[0] or "elsewhere"
+            return f"{leaf}@{host}"
         return text
 
     def object_id_from(self, value: str) -> str:
@@ -145,7 +160,14 @@ class Renderer:
     # -- records to the wire -----------------------------------------------
 
     def note(self, record: ObjectRecord) -> Note:
-        return Note(
+        """Render a stored message.
+
+        Unknown properties and the addressed ``audience`` are put back, because
+        storing them and then not returning them would half-defeat the point of
+        keeping them (ADR 0006).
+        """
+        extras = {k: v for k, v in record.document.items() if k not in {"audience"}}
+        note = Note(
             id=self.object_uri(record.id),
             attributed_to=self.actor_uri(record.attributed_to),
             to=[self.actor_uri(n) for n in record.to],
@@ -156,7 +178,10 @@ class Renderer:
                 self.object_uri(record.in_reply_to) if record.in_reply_to else None
             ),
             published=record.published or None,
+            audience=list(record.document.get("audience", ())) or None,
         )
+        note.extra = extras
+        return note
 
     def actor(self, record: ActorRecord) -> Actor:
         uri = self.actor_uri(record.name)
@@ -186,5 +211,9 @@ def unknown_properties(document: dict[str, Any]) -> dict[str, Any]:
     typed structs cannot do it, which is why the body is decoded twice.
     """
     inner = document.get("object")
-    source = inner if isinstance(inner, dict) else document
-    return {k: v for k, v in source.items() if k not in MODELLED}
+    found = {k: v for k, v in document.items() if k not in MODELLED}
+    if isinstance(inner, dict):
+        # Properties on the activity *and* on the object it wraps. Taking only the
+        # inner ones silently dropped anything a peer put on the Create itself.
+        found.update({k: v for k, v in inner.items() if k not in MODELLED})
+    return found

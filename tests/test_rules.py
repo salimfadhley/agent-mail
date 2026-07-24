@@ -210,9 +210,17 @@ class TestScenario8Intrusion:
     def test_a_new_thread_is_always_allowed(self) -> None:
         assert may_attach_to(self.OBJECTS, YITZHAK, None, ACTORS, NO_GROUPS)
 
-    def test_an_unknown_parent_is_allowed(self) -> None:
-        """There is nothing to intrude upon, so this send simply starts a thread."""
-        assert may_attach_to(self.OBJECTS, YITZHAK, "never-existed", ACTORS, NO_GROUPS)
+    def test_an_unknown_parent_is_refused_like_a_forbidden_one(self) -> None:
+        """Both clear the parent, so the answer is not an existence oracle.
+
+        Allowing an unknown parent let a caller distinguish "real but not yours" from
+        "no such thing" by reading its own successful response — the probe the
+        visibility rules refuse to answer everywhere else. Found by outside review.
+        """
+        assert not may_attach_to(
+            self.OBJECTS, YITZHAK, "never-existed", ACTORS, NO_GROUPS
+        )
+        assert not may_attach_to(self.OBJECTS, YITZHAK, "m1", ACTORS, NO_GROUPS)
 
 
 class TestScenario9Expiry:
