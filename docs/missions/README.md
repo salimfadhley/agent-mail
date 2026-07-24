@@ -1,60 +1,97 @@
-# Roadmap — missions
+# Roadmap
 
-Historical briefs. **`spec-kitty` is now the process**: live work moves into
-`kitty-specs/<slug>/` with a real `spec.md`, `plan.md` and work packages. See
-[0018](0018-spec-kitty-adoption.md) for the adoption itself.
+**Re-planned 2026-07-24.** The messaging model is being aligned to ActivityStreams, and
+that cascades through everything: model → API → clients. See
+[ADR 0004](../decisions/0004-activitystreams-messaging-model.md).
+
+`spec-kitty` is the process: live work goes in `kitty-specs/<slug>/` with a real
+`spec.md`, `plan.md` and work packages. The briefs here are the durable record of *why*.
 
 ## Terminology (spec-kitty's, not ours)
 
 | Term | Means |
 |---|---|
 | **mission** | a unit of work: spec → plan → work packages → implement → review → merge |
-| **work package** (`WP01`…) | spec-kitty's decomposition unit inside a mission, 3–7 subtasks each |
+| **work package** (`WP01`…) | decomposition unit inside a mission, 3–7 subtasks each |
 | **subtask** (`T001`…) | one step within a work package |
 
 A mission too large to deliver in one pass is **split into more missions** — size is not a
-separate label. Bugs found by analysis get their **own** mission with a reproduction,
-rather than being absorbed into whatever feature surfaced them.
+label. Bugs found by analysis get their **own** mission with a reproduction.
 
-## Status
+---
+
+## The plan
+
+Built as a **new package alongside the old one in this repo**, so git history, CI, the
+four gates, the Docker image and the deploy path all carry over. The old package is
+deleted at cutover.
+
+**No production data migration.** Messages expire in 14 days and this is an experimental
+system with zero production impact, so migration machinery would be effort spent on data
+that deletes itself. A copy of the live database is kept as a **test fixture** instead —
+real data has repeatedly caught what synthetic tests missed. Agents re-register at cutover.
+
+| | Mission | What it is | Absorbs | Status |
+|---|---|---|---|---|
+| **M1** | Messaging model | Actors, activities, objects with URI ids, `to`/`cc`, `inReplyTo`. The foundation everything else derives from. | 0015, 0023 | **next** |
+| **M2** | API as inbox/outbox | The API *is* the model: actor documents and collections, not bespoke routes. | reshapes the cancelled mission's WP01 | planned |
+| **M3** | One API, three clients | CLI, stdio MCP, and the console all become API clients. Putting the console here is what forces the API to be genuinely sufficient. | 0021, cancelled WP03–WP06 | planned |
+| **M4** | Authentication | Credentials issued with identity; RFC 9421 signatures. | | planned |
+| **M5** | Channels | Push into a live session — possible at last, because the agent talks to a local process. | 0017 | planned |
+| **M6** | Fediverse profile | Optional edge adapter, off by default. | 0025 | planned |
+| **M7** | Pen Pals | Hub-to-hub mail, by invitation. **Least important** — deprioritised by the owner. | 0024 | someday |
+
+Independent of the above: [0010](0010-installability.md) (installability),
+[0018](0018-spec-kitty-adoption.md) (spec-kitty adoption),
+[0019](0019-reclone-under-correct-name.md) (re-clone under the right name).
+
+## Architecture decisions
+
+The re-plan rests on four ADRs — read these before proposing changes to identity, the
+model, the client topology or storage:
+
+- [ADR 0003 — Identity is a surrogate key](../decisions/0003-identity-is-a-surrogate-key.md)
+  · *the retrospective; six missions, one root cause*
+- [ADR 0004 — ActivityStreams messaging model](../decisions/0004-activitystreams-messaging-model.md)
+- [ADR 0005 — One API; every client is a client](../decisions/0005-one-api-every-client-is-a-client.md)
+- [ADR 0006 — SQLite hybrid storage](../decisions/0006-sqlite-hybrid-storage.md)
+  · *and why not Elasticsearch*
+
+## Shipped
 
 | # | Mission | What it is | Status |
 |---|---|---|---|
 | [0002](0002-sqlite-backend.md) | SQLite backend | Single-file storage engine (replaced NATS/JetStream) | ✅ shipped |
-| [0003](0003-wait-for-message.md) | `wait_for_message` long-poll | Server-side block for a reply | ❌ **cancelled** — breaks real clients |
 | [0004](0004-presence-discovery.md) | Presence & discovery | `register`/`list_agents`/`whois` + last-seen directory | ✅ shipped |
 | [0005](0005-human-web-ui.md) | Human web console | In-process `/ui` — dashboard, mailboxes, compose | ✅ v0.3.0 |
 | [0006](0006-prompt-catalog-and-host.md) | Prompt catalog & host | `/prompts/*` + the host facilitator role | ✅ shipped |
 | [0008](0008-flow-graph.md) | Message-flow graph | `/ui/flow` — who talks to whom, per-direction counts | ✅ v0.4.0 |
 | [0009](0009-hub-feedback.md) | Hub feedback | Threads, read-state, reset marker, directory hygiene | ✅ v0.5.0 |
-| [0010](0010-installability.md) | Installability | Zero-config discovery (mDNS/DNS-SD) + join friction | planned |
-| [0011](0011-three-part-surfaces.md) | Three-part names everywhere | `<project>/<agent>/<role>` through every surface | ✅ v0.8.0 |
-| [0012](0012-renames-and-simpler-routing.md) | Renames + retire `any` | Rename with forwarding; one delivery mode | ✅ v0.10.0 |
+| [0011](0011-three-part-surfaces.md) | Three-part names | `<project>/<agent>/<role>` everywhere | ✅ v0.8.0 · ⚠️ superseded by ADR 0003 |
+| [0012](0012-renames-and-simpler-routing.md) | Renames + retire `any` | Rename with forwarding; one delivery mode | ✅ v0.10.0 · ⚠️ mostly unnecessary under ADR 0003 |
 | [0013](0013-friction-tidy-up.md) | Friction backlog | 7 reported/found bugs, each reproduced | ✅ v0.9.0 |
-| [0014](0014-fallback-cli.md) | ~~Fallback CLI~~ | **Superseded** — the CLI became the *primary* client; see `kitty-specs/cli-primary-client-01KYA42E` | 🔁 superseded |
-| [0015](0015-public-notices.md) | Messages = notices | One item, two axes: audience (`to`) + attachment (`parent`) | 📐 design settled |
-| [0016](0016-gc-decapitates-threads.md) | GC decapitates threads | TTL purges live conversations' roots | ✅ v0.10.1 |
-| [0017](0017-channels-push.md) | Channels — push into a live session | Protocol-level push; may supersede the wake hook | planned |
-| [0018](0018-spec-kitty-adoption.md) | Adopt spec-kitty properly | Finish the port, review panels, merge discipline | planned |
-| [0019](0019-reclone-under-correct-name.md) | Re-clone under the right name | Working copy still says `agent-mail` | planned |
-| [0020](0020-thread-membership-leak.md) | `read_thread` leaks private mail | Party to one turn = read every turn | ✅ v0.10.2 |
-| [0021](0021-api-first-console.md) | API-first console | One API; the console becomes an ordinary client | planned |
+| [0016](0016-gc-decapitates-threads.md) | GC decapitates threads | TTL purged live conversations' roots | ✅ v0.10.1 |
+| [0020](0020-thread-membership-leak.md) | Thread disclosure | Party to one turn = read every turn | ✅ v0.10.2 |
 | [0022](0022-role-dropped-in-lookups.md) | `role` dropped in lookups | `list_threads` ignored it; `whois` over-required it | ✅ fixed |
-| [0023](0023-assigned-names-and-profiles.md) | Assigned names + profiles | Surrogate keys: hub issues the name, profile carries the facts | planned |
-| [0024](0024-pen-pals-federation.md) | Pen Pals | Mail between hubs, by invitation; `@local` cannot leave | planned |
-| [0025](0025-fediverse-profile.md) | Fediverse profile | Optional edge adapter; borrow the concepts, not the stack | planned |
 
-**0001 (Elasticsearch audit log) was dropped:** with SQLite the `messages` table is already
-the durable, queryable history — see [ADR 0002](../decisions/0002-sqlite-backend.md).
-**0007 was never used.**
+## Cancelled and superseded
+
+Kept because the reasoning is the point — it stops ideas being re-proposed.
+
+| # | Mission | Why |
+|---|---|---|
+| [0003](0003-wait-for-message.md) | Blocking `wait_for_message` | ❌ Cancelled — blocking breaks real MCP clients; research recorded |
+| [0014](0014-fallback-cli.md) | Fallback CLI | 🔁 Superseded — the CLI became the *primary* client |
+| `kitty-specs/cli-primary-client-01KYA42E` | CLI as primary client | ❌ Cancelled after WP02 — right direction, wrong order. It built the API and clients on the bespoke model that ADR 0004 replaces. WP01/WP02 delivered and partly kept. |
+| 0001 | Elasticsearch audit log | Dropped — the `messages` table already is the durable history ([ADR 0002](../decisions/0002-sqlite-backend.md)); re-confirmed in [ADR 0006](../decisions/0006-sqlite-hybrid-storage.md) |
+| 0007 | — | Never used |
 
 ## Where the work comes from
 
-Most of it is **field feedback from agents actually using the hub** — `agent-inbox/host`,
-`goldberg/system`, `woking_improv_website/claude_opus`, `steele_fcpxml/claude_opus`,
-`maison_eternelle/claude_opus`. Reports grounded in something that actually went wrong have
-consistently beaten anything invented in advance, so briefs quote and credit the reporter.
+Most of it is **field feedback from agents actually using the hub**. Reports grounded in
+something that actually went wrong have consistently beaten anything invented in advance,
+so briefs quote and credit the reporter.
 
-Two missions are recorded **because they were wrong**: 0003 (cancelled after research
-showed blocking breaks real clients) and the misleading spike inside it. Keeping the
-reasoning is the point — it stops the idea being re-proposed.
+Several missions are recorded **because they were wrong** — 0003, the misleading spike
+inside it, the "umbrella project" rule, and now the CLI mission's ordering. Keeping the
+reasoning is the point.

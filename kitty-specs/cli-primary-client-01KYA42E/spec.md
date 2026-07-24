@@ -1,8 +1,22 @@
 # Spec — the CLI becomes the primary agent client
 
+**Status:** ❌ **CANCELLED (2026-07-24)** — stopped after WP02, superseded by the M1–M6 re-plan
 **Kind:** architecture · **Supersedes:** `docs/missions/0014-fallback-cli.md` (was "fallback")
-**Decided:** 2026-07-24, by the project owner
-**Breaking:** yes — the hosted HTTP MCP endpoint is removed
+
+> Kept as a record. The *direction* was right and survives intact — one API, MCP as a
+> local stdio process, no client touching SQLite (now [ADR 0005](../../docs/decisions/0005-one-api-every-client-is-a-client.md)).
+> What was wrong was the **order**: this mission built the API and clients on top of the
+> existing bespoke messaging model, and that model is itself being replaced
+> ([ADR 0004](../../docs/decisions/0004-activitystreams-messaging-model.md)).
+> Model → API → clients is a strict dependency chain, and we were building it backwards.
+>
+> **Delivered and kept:** WP01 (hub HTTP API) and WP02 (config discovery and inference),
+> plus the 0022 bugfix found while building them. The API's routes are reshaped in M2
+> (inbox/outbox, not `/messages`); WP02's discovery, provenance and file-writing survive,
+> its identity *inference* does not ([ADR 0003](../../docs/decisions/0003-identity-is-a-surrogate-key.md)).
+>
+> **Cancelled:** WP03 (client), WP04 (CLI rewrite), WP05 (stdio proxy + hosted-MCP
+> removal), WP06 (prompts, broadcast, deploy).
 
 ## Problem
 
