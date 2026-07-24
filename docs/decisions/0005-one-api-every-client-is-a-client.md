@@ -35,8 +35,10 @@ peer hub ------------------HTTP-->  API
 
 - **The API is the only machine interface.** The hosted MCP transport is removed, not kept
   alongside.
-- **MCP becomes local.** The CLI runs a stdio MCP server on the agent's own machine. Being
-  a local process is what makes channels possible later.
+- **MCP is a client, not a translator.** An MCP server runs on the agent's own machine
+  and calls the API like anything else. It is *not* a proxy: it holds no messaging
+  semantics of its own, exactly as the console is a client that happens to speak HTML to
+  a browser. Being a local process is what makes channels possible later.
 - **The console is an ordinary client.** No privileged direct access to `Mailbox`
   ([0021](../missions/0021-api-first-console.md)).
 - **Only the server process opens the database.** No client has a `--db` escape hatch.
@@ -57,7 +59,7 @@ peer hub ------------------HTTP-->  API
 **Costs, accepted.**
 
 - Everything is rewritten as a client. That is most of the CLI and most of the console.
-- One extra hop for agents: MCP to the local CLI, HTTP to the hub.
+- One extra hop for agents: MCP to a local client, HTTP to the hub.
 - A flag day. Removing hosted MCP disconnects every agent until its human reinstalls, so
   migration instructions must be broadcast **while the old endpoint still works**.
 
@@ -67,3 +69,17 @@ The console legitimately observes every mailbox; agents legitimately do not. Tha
 asymmetry is **authorisation on shared routes**, not a separate privileged code path —
 otherwise we have rebuilt the two-doors problem inside the API. Until authentication
 exists, the omniscient view simply gets no route at all.
+
+
+## A note on vocabulary
+
+Early drafts called the local MCP server a *proxy*. That word was wrong, and wrong in a
+way that invites the failure this ADR exists to prevent: a "proxy" sounds like something
+with semantics of its own, and semantics of its own is how a second door opens.
+
+**There are no proxies here. There are clients.** The CLI, the MCP server and the
+console are peers — each speaks a different dialect to whoever is in front of it, and
+all three speak the same API to the hub. If any of them ever needs to *decide*
+something about messaging, the API is missing a route.
+
+That is what API-first means.

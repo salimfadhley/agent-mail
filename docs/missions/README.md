@@ -34,8 +34,8 @@ real data has repeatedly caught what synthetic tests missed. Agents re-register 
 | | Mission | What it is | Absorbs | Status |
 |---|---|---|---|---|
 | **M1** | Messaging model | Actors, addressing, threading, visibility, expiry, storage port, policy layer. | 0015, 0023 | ✅ **complete** |
-| **M2** | API as inbox/outbox | The API *is* the model: actor documents and collections, not bespoke routes. | reshapes the cancelled mission's WP01 | **next** |
-| **M3** | One API, three clients | CLI, stdio MCP, and the console all become API clients. Putting the console here is what forces the API to be genuinely sufficient. | 0021, cancelled WP03–WP06 | planned |
+| **M2** | The API | ActivityStreams on the wire, ActivityPub's route shape (`/actors/{name}/inbox`, `/outbox`). Includes the console's observation routes — built now, secured later. | reshapes the cancelled mission's WP01 | **next** |
+| **M3** | Three clients | CLI, a local MCP server, and the console — all **ordinary API clients**, none a proxy, none holding messaging semantics. | 0021, cancelled WP03–WP06 | planned |
 | **M4** | Authentication | Credentials issued with identity; RFC 9421 signatures. | | planned |
 | **M5** | Channels | Push into a live session — possible at last, because the agent talks to a local process. | 0017 | planned |
 | **M6** | Fediverse profile | Optional edge adapter, off by default. | 0025 | planned |
