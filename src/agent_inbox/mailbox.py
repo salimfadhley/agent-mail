@@ -1024,11 +1024,25 @@ class Mailbox:
     async def whois(
         self, project: str, agent: str, role: str | None = None
     ) -> AgentInfo | None:
-        """Return one agent's directory entry, or ``None`` if never registered."""
-        cursor = await self._conn.execute(
-            "SELECT * FROM agents WHERE project = ? AND agent = ? AND role = ?",
-            (project, agent, role or ""),
-        )
+        """Return one agent's directory entry, or ``None`` if never registered.
+
+        Omitting ``role`` matches **any** role, because that is what an omitted address
+        position means everywhere else: `proj/alice` reaches `proj/alice/agent` when
+        sending, so it must find it here too. Requiring an exact match made the natural
+        lookup fail for every agent that held a role (mission 0022). When several roles
+        match, the most recently seen wins — a directory lookup is asking who is live.
+        """
+        if role is None:
+            cursor = await self._conn.execute(
+                "SELECT * FROM agents WHERE project = ? AND agent = ? "
+                "ORDER BY last_seen DESC LIMIT 1",
+                (project, agent),
+            )
+        else:
+            cursor = await self._conn.execute(
+                "SELECT * FROM agents WHERE project = ? AND agent = ? AND role = ?",
+                (project, agent, role),
+            )
         row = await cursor.fetchone()
         return self._row_to_agent_info(row) if row else None
 
@@ -1162,8 +1176,8 @@ class Mailbox:
         and whether it went anywhere, so a coordinator need not keep its working memory
         in a local file.
         """
-        me = format_address(project, agent)
-        params = await self._party_params(project, agent)
+        me = format_address(project, agent, role)
+        params = await self._party_params(project, agent, role)
         cursor = await self._conn.execute(
             f"SELECT * FROM messages WHERE {self._party_clause()} ORDER BY created ASC",
             params,

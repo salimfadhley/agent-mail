@@ -365,6 +365,52 @@ async def test_read_thread_hides_private_turns_from_broadcast_recipients(
     ]
 
 
+async def test_whois_without_a_role_finds_a_role_holding_agent(
+    mailbox: Mailbox,
+) -> None:
+    """Mission 0022. An omitted address position is a wildcard *everywhere*.
+
+    `proj/alice` reaches `proj/alice/agent` when sending, so it must find it in the
+    directory too. Requiring an exact role match made the natural lookup return None
+    for every agent that held a role.
+    """
+    project = _project()
+    await mailbox.register(project, "alice", AgentProfile(offers=["deploys"]), "agent")
+
+    found = await mailbox.whois(project, "alice")
+    assert found is not None
+    assert found.address == f"{project}/alice/agent"
+    assert found.profile.offers == ["deploys"]
+
+    # naming the role explicitly still works, and a wrong role still misses
+    assert await mailbox.whois(project, "alice", "agent") is not None
+    assert await mailbox.whois(project, "alice", "host") is None
+
+
+async def test_list_threads_respects_the_agents_role(mailbox: Mailbox) -> None:
+    """Mission 0022. `list_threads` accepted `role` and never used it.
+
+    The address it compared against was built without the role, so a role-holding
+    agent matched nothing and saw an empty list — no error, just silence.
+    """
+    project = _project()
+    await mailbox.send(
+        Message(
+            from_=f"{project}/alice/agent",
+            to=f"{project}/bob/agent",
+            subject="hello",
+            body="hi",
+        )
+    )
+
+    mine = await mailbox.list_threads(project, "alice", role="agent")
+    assert len(mine) == 1
+    assert mine[0].counterparts == [f"{project}/bob/agent"]
+
+    theirs = await mailbox.list_threads(project, "bob", role="agent")
+    assert len(theirs) == 1
+
+
 async def test_send_cannot_inject_a_turn_into_someone_elses_thread(
     mailbox: Mailbox,
 ) -> None:
@@ -702,7 +748,13 @@ async def test_rename_moves_mail_profile_and_forwards(mailbox: Mailbox) -> None:
     # the profile moved too
     moved_info = await mailbox.whois(project, "claude", "system")
     assert moved_info is not None and moved_info.profile.offers == ["deploys"]
-    assert await mailbox.whois(project, "claude") is None
+    # the old *exact* identity (no role) is gone from the directory...
+    assert await mailbox.whois(project, "claude", "") is None
+    # ...but a role-less lookup is a wildcard, so it resolves to the new entry —
+    # matching delivery, where mail to `project/claude` reaches `project/claude/system`
+    # (mission 0022).
+    still = await mailbox.whois(project, "claude")
+    assert still is not None and still.address == f"{project}/claude/system"
 
     # later mail to the OLD name is delivered onward, and the sender is told
     sent = await mailbox.send(
