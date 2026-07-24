@@ -216,11 +216,16 @@ class TestDistinctFailures:
                 await mailbox.send("rosemary_nasrin", bad, "x")
 
     async def test_an_empty_group_is_not_an_error(self, mailbox: Mailbox) -> None:
-        """A group with nobody in it is legitimately empty, not a typo."""
+        """A group with nobody else in it is legitimately empty, not a typo.
+
+        `to` holds who it actually reached — nobody, since the sender is excluded from
+        their own message — while `audience` records that "ops" was addressed.
+        """
         await mailbox.join("rosemary_nasrin")
         await mailbox.update_profile("rosemary_nasrin", {"groups": ["ops"]})
         sent = await mailbox.send("rosemary_nasrin", "ops", "anyone there?")
-        assert sent.to == ("ops",)
+        assert sent.to == ()
+        assert sent.document["audience"] == ["ops"]
 
     async def test_everyone_works_on_an_otherwise_empty_mailbox(
         self, mailbox: Mailbox

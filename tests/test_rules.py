@@ -258,3 +258,36 @@ class TestPurity:
         first = visible_turns(objects, "m1", YITZHAK, ACTORS, NO_GROUPS)
         second = visible_turns(objects, "m1", YITZHAK, ACTORS, NO_GROUPS)
         assert first == second
+
+
+class TestRetroactiveMembership:
+    """Joining a group must not grant access to what it was sent before you arrived.
+
+    Found by an outside review of M1. Group membership was resolved when a thread was
+    *read* rather than when a message was *sent*, and since an agent declares its own
+    groups, anyone could add themselves to a group and retroactively read its history —
+    then attach turns to private threads rooted in it. The 0020 disclosure, through a
+    different door.
+
+    The fix restores ActivityStreams: `to` holds the resolved recipients, decided at
+    send time. Storing the unresolved audience there was our deviation, and the
+    deviation was the bug.
+    """
+
+    def test_resolution_is_a_snapshot_not_a_query(self) -> None:
+        """The rule itself is unchanged — what matters is *when* it is applied."""
+        present = ("rosemary_nasrin", "trevor_mahmood")
+        at_send = resolve_audience(("ops",), present, {"ops": frozenset(present)})
+        assert at_send == {"rosemary_nasrin", "trevor_mahmood"}
+
+        # a later arrival changes the membership map, but not a message already sent
+        later = (*present, "yitzhak_levin")
+        at_read = resolve_audience(("ops",), later, {"ops": frozenset(later)})
+        assert "yitzhak_levin" in at_read
+        assert "yitzhak_levin" not in at_send
+
+    def test_a_stored_message_names_actors_not_groups(self) -> None:
+        """Once `to` holds actors, membership cannot change who a message reached."""
+        already_resolved = note("m1", ROSEMARY, (TREVOR,))
+        for memberships in ({}, {"ops": frozenset({YITZHAK})}):
+            assert recipients_of(already_resolved, ACTORS, memberships) == {TREVOR}

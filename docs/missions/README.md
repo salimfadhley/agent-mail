@@ -84,6 +84,7 @@ model, the client topology or storage:
 | [0016](0016-gc-decapitates-threads.md) | GC decapitates threads | TTL purged live conversations' roots | ✅ v0.10.1 |
 | [0020](0020-thread-membership-leak.md) | Thread disclosure | Party to one turn = read every turn | ✅ v0.10.2 |
 | [0022](0022-role-dropped-in-lookups.md) | `role` dropped in lookups | `list_threads` ignored it; `whois` over-required it | ✅ fixed |
+| [0028](0028-retroactive-group-membership.md) | Retroactive group membership | Joining a group opened its past; found by outside review | ✅ fixed |
 
 ## Cancelled and superseded
 

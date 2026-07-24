@@ -193,15 +193,37 @@ class Mailbox:
             ):
                 parent = None
 
+        # Resolve the audience **now**, and store who it actually reached.
+        #
+        # ActivityStreams puts resolved recipients in `to`; storing the *unresolved*
+        # audience was our deviation, and it was a disclosure. Membership is
+        # self-declared, so an agent that added itself to a group later became
+        # retroactively party to everything that group was ever sent — able to read the
+        # history and to attach turns to threads rooted in it. Resolving at send time
+        # means a message reaches who was there when it was sent, which is also what
+        # every mail system does.
+        # The sender comes out here too: `to` now means *who received this*, and you
+        # never receive your own message. Read-time exclusion still happens and is
+        # harmless — but a stored `to` that listed the sender would be a lie.
+        reached = rules.resolve_audience(recipients, all_actors, memberships) - {sender}
+        also = (
+            rules.resolve_audience(copies, all_actors, memberships) - {sender} - reached
+        )
+        resolved_to = tuple(sorted(reached))
+        resolved_cc = tuple(sorted(also))
+
         obj = ObjectRecord(
             id=uuid.uuid4().hex,
             attributed_to=sender,
-            to=recipients,
-            cc=copies,
+            to=resolved_to,
+            cc=resolved_cc,
             in_reply_to=parent,
             summary=subject,
             content=body,
             published=self._now(),
+            # What was typed, kept for display and provenance. AS2 has `audience` for
+            # exactly this: `to` is who it went to, `audience` is who it was aimed at.
+            document={"audience": list(recipients + copies)},
         )
         await self._store.add_object(obj)
         return obj

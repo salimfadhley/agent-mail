@@ -343,3 +343,66 @@ class _Clock:
 
     def advance(self, **delta: float) -> None:
         self._now += timedelta(**delta)
+
+
+class TestRetroactiveMembership:
+    """Regression: joining a group late must not open its history."""
+
+    async def test_a_late_joiner_cannot_read_the_groups_past(
+        self, mailbox: Mailbox
+    ) -> None:
+        from agent_mailbox.records import ActorRecord as _Actor
+        from agent_mailbox.vocabulary import ActorType as _Type
+
+        await joined(mailbox, ROSEMARY, TREVOR)
+        await mailbox._store.claim_name(_Actor(name="ops", actor_type=_Type.GROUP))
+        await mailbox.update_profile(TREVOR, {"groups": ["ops"]})
+
+        root = await mailbox.send(ROSEMARY, "ops", "ops root")
+        await mailbox.send(ROSEMARY, TREVOR, "private follow-up", in_reply_to=root.id)
+
+        await joined(mailbox, YITZHAK)
+        await mailbox.update_profile(YITZHAK, {"groups": ["ops"]})
+
+        assert await mailbox.peek(YITZHAK) == ()
+        assert await mailbox.thread(YITZHAK, root.id) == ()
+
+    async def test_a_late_joiner_cannot_attach_to_the_groups_past(
+        self, mailbox: Mailbox
+    ) -> None:
+        from agent_mailbox.records import ActorRecord as _Actor
+        from agent_mailbox.vocabulary import ActorType as _Type
+
+        await joined(mailbox, ROSEMARY, TREVOR)
+        await mailbox._store.claim_name(_Actor(name="ops", actor_type=_Type.GROUP))
+        await mailbox.update_profile(TREVOR, {"groups": ["ops"]})
+        root = await mailbox.send(ROSEMARY, "ops", "ops root")
+
+        await joined(mailbox, YITZHAK)
+        await mailbox.update_profile(YITZHAK, {"groups": ["ops"]})
+
+        intruding = await mailbox.send(YITZHAK, TREVOR, "me too", in_reply_to=root.id)
+        assert intruding.in_reply_to is None
+
+    async def test_a_late_joiner_does_receive_future_group_mail(
+        self, mailbox: Mailbox
+    ) -> None:
+        """The fix must not break the point of groups."""
+        from agent_mailbox.records import ActorRecord as _Actor
+        from agent_mailbox.vocabulary import ActorType as _Type
+
+        await joined(mailbox, ROSEMARY, YITZHAK)
+        await mailbox._store.claim_name(_Actor(name="ops", actor_type=_Type.GROUP))
+        await mailbox.update_profile(YITZHAK, {"groups": ["ops"]})
+
+        await mailbox.send(ROSEMARY, "ops", "after joining")
+        assert [m.content for m in await mailbox.peek(YITZHAK)] == ["after joining"]
+
+    async def test_what_was_addressed_is_kept_alongside_who_it_reached(
+        self, mailbox: Mailbox
+    ) -> None:
+        """`to` is who got it; `audience` is who it was aimed at (AS2)."""
+        await joined(mailbox, ROSEMARY, TREVOR)
+        sent = await mailbox.send(ROSEMARY, "everyone", "all hands")
+        assert sent.to == (TREVOR,)
+        assert sent.document["audience"] == ["everyone"]
