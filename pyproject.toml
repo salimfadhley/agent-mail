@@ -88,7 +88,12 @@ line-length = 88
 target-version = "py312"
 # The superseded implementation is kept for reference only and is deleted once the new
 # system is green; linting code we are removing is waste (charter: Testing Standards).
-exclude = ["agent-mailbox-old"]
+exclude = [
+    "agent-mailbox-old",
+    # One-off build script, kept for provenance of the checked-in name pool. It is
+    # never imported, never shipped, and depends on libraries we removed.
+    "tools",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B"]

@@ -1,5 +1,8 @@
 """Cook the checked-in name pool. Build-time only; Faker is not a runtime dependency."""
-import re, warnings, textwrap
+import re
+import textwrap
+import warnings
+
 warnings.filterwarnings("ignore")
 from faker import Faker
 from unidecode import unidecode
