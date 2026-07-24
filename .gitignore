@@ -60,3 +60,6 @@ mcp.json
 
 # Internal working prompts (not for the public repo)
 doc/
+
+# spec-kitty execution worktrees
+.worktrees/
