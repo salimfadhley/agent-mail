@@ -41,6 +41,13 @@ real data has repeatedly caught what synthetic tests missed. Agents re-register 
 | **M6** | Fediverse profile | Optional edge adapter, off by default. | 0025 | planned |
 | **M7** | Pen Pals | Hub-to-hub mail, by invitation. **Least important** — deprioritised by the owner. | 0024 | someday |
 
+Also planned, both on seams M1 already built:
+
+- [0026 — house rules](0026-policy-engine.md): a richer policy engine. Adds restrictions
+  and capabilities **without changing the interface**, so it can land at any point.
+- [0027 — the self-hosted host](0027-self-hosted-host.md): a container running a prompt
+  loop that attends to `host`'s duties, woken by mail. Wants M5 (channels) first.
+
 Independent of the above: [0010](0010-installability.md) (installability),
 [0018](0018-spec-kitty-adoption.md) (spec-kitty adoption),
 [0019](0019-reclone-under-correct-name.md) (re-clone under the right name).

@@ -25,7 +25,21 @@ from agent_mailbox.name_pool import FAMILY_NAMES, GIVEN_NAMES
 #: Reserved: addressing keywords, not names anyone may hold. ``local`` matters
 #: most — it is a guarantee of non-egress, so it must never be something an
 #: agent can be called.
-RESERVED_NAMES: frozenset[str] = frozenset({"local", "all", "any", "public", "me"})
+RESERVED_NAMES: frozenset[str] = frozenset(
+    {
+        # addressing keywords
+        "local",
+        "all",
+        "any",
+        "public",
+        "me",
+        "everyone",
+        # standing residents — the hub's own mailboxes. Reserved so no agent can claim
+        # one and quietly start receiving the hub's complaints or its introductions.
+        "admin",
+        "host",
+    }
+)
 
 _VALID = re.compile(r"^[a-z0-9](?:[a-z0-9_]{0,62}[a-z0-9])?$")
 

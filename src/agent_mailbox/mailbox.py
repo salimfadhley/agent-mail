@@ -284,6 +284,40 @@ class Mailbox:
         objects = tuple(await self._store.objects())
         return rules.visible_turns(objects, root_id, me, all_actors, memberships)
 
+    async def view(self, caller: str, object_id: str) -> ObjectRecord:
+        """One message the caller is party to, **without consuming it**.
+
+        The single-message counterpart of :meth:`peek`. Useful when you need a
+        message's details in order to act on it — replying, say — and consuming it as a
+        side effect of looking would be a trap.
+        """
+        return await self._visible_object(caller, object_id)
+
+    async def install_resident(
+        self, name: str, *, profile: dict[str, object] | None = None
+    ) -> ActorRecord:
+        """Create a standing mailbox the hub itself owns, bypassing name reservation.
+
+        ``admin`` and ``host`` are reserved precisely so no agent can claim them, which
+        also means the ordinary :meth:`join` path cannot create them. This is the
+        deliberate exception, used by policy at startup and nowhere else.
+
+        Idempotent: if the name is already held, the existing actor is returned
+        untouched, so reopening a mailbox never disturbs a resident's profile.
+        """
+        now = self._now()
+        actor = ActorRecord(
+            name=name,
+            actor_type=ActorType.SERVICE,
+            profile=profile or {},
+            created=now,
+            last_seen=now,
+        )
+        if await self._store.claim_name(actor):
+            return actor
+        existing = await self._store.get_actor(name)
+        return existing if existing is not None else actor
+
     async def _visible_object(self, caller: str, object_id: str) -> ObjectRecord:
         """Fetch a message the caller is party to, or refuse indistinguishably."""
         me = (await self._require_actor(caller)).name
