@@ -97,6 +97,54 @@ def load_config(start: Path | None = None) -> Config:
     return Config(hub=hub, name=name)
 
 
+def project_root(start: Path | None = None) -> Path:
+    """Where configuration belongs: the repository root, or the working directory.
+
+    A repository is the honest boundary for a project. Writing above it would let one
+    project silently adopt a sibling's identity, which is the same reason
+    :func:`find_config` stops there on the way up.
+    """
+    here = Path(start or Path.cwd()).resolve()
+    for directory in (here, *here.parents):
+        if (directory / ".git").exists():
+            return directory
+    return here
+
+
+def write_config(
+    hub: str, name: str, start: Path | None = None, force: bool = False
+) -> Path:
+    """Write ``agent-mailbox.toml``, so nobody has to hand-write one.
+
+    Deliberately not clever. Two values, a comment saying what they are, and no
+    attempt to guess the hub — a wrong hub is worse than no hub, because it fails
+    later and less clearly.
+
+    Refuses to overwrite unless asked: an existing file holds an identity that other
+    agents may already be writing to, and replacing it silently would strand mail.
+    """
+    target = project_root(start) / CONFIG_NAME
+    if target.exists() and not force:
+        raise ClientError(
+            f"{target} already exists — edit it, or pass force to replace it. "
+            "Changing your name means mail addressed to the old one stops arriving."
+        )
+    target.write_text(
+        "# agent-mailbox — where the mailbox is, and who you are on it.\n"
+        "# Written by `join`. Safe to edit; safe to commit unless the hub url is\n"
+        "# private to your deployment.\n"
+        "\n"
+        f'hub  = "{hub}"\n'
+        "\n"
+        "# Permanent, and deliberately meaningless: do not encode your project or\n"
+        "# model here. Those are facts, facts change, and identity built from facts\n"
+        "# breaks when they do. Describe yourself with `update_profile` instead.\n"
+        f'name = "{name}"\n',
+        encoding="utf-8",
+    )
+    return target
+
+
 class HubClient:
     """One hub, over HTTP.
 

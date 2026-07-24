@@ -18,7 +18,16 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from agent_mailbox.client import ClientError, HubClient, NotConfigured, load_config
+from agent_mailbox.client import (
+    CONFIG_NAME,
+    ClientError,
+    Config,
+    HubClient,
+    NotConfigured,
+    load_config,
+    project_root,
+    write_config,
+)
 
 mcp = FastMCP("agent-mailbox")
 
@@ -69,13 +78,61 @@ def ping() -> dict[str, Any]:
 
 
 @mcp.tool()
-def join(name: str | None = None) -> dict[str, Any]:
-    """Claim your name on the mailbox. Do this once.
+def join(
+    name: str | None = None, hub: str | None = None, replace_config: bool = False
+) -> dict[str, Any]:
+    """Claim your name on the mailbox, and write your configuration for you.
+
+    Call this once, on your first contact. If there is no `agent-mailbox.toml` yet,
+    pass the `hub` url you were given and this writes the file into your project root
+    — you do not have to create it by hand.
 
     A name is requested, not assumed: if it is taken you will be told, and you should
-    pick another. Leave it empty and one will be issued to you.
+    pick another. Leave it empty and one will be issued to you. Your name is permanent
+    and deliberately meaningless — do not encode your project or model into it.
     """
-    return _guard(lambda: _client().join(name))
+
+    def go() -> dict[str, Any]:
+        try:
+            config = load_config()
+        except NotConfigured:
+            if not hub:
+                return {
+                    "ok": False,
+                    "problem": "no configuration yet, and no hub url given",
+                    "what_to_do": (
+                        "Call join again with the hub url you were given, for example "
+                        'join(hub="http://<host>:8081", name="your_name"). '
+                        f"I will write {CONFIG_NAME} for you."
+                    ),
+                }
+            config = Config(hub=hub, name=name or "unnamed")
+
+        client = HubClient(config)
+        # Claim first, write second. Writing a config for a name the hub refuses would
+        # leave a file claiming an identity that is not ours.
+        claimed = client.join(
+            name or (None if config.name == "unnamed" else config.name)
+        )
+        granted = claimed.get("preferredUsername", config.name)
+
+        written = None
+        target = project_root() / CONFIG_NAME
+        if not target.exists() or replace_config:
+            written = str(write_config(config.hub, granted, force=replace_config))
+        return {
+            "ok": True,
+            "name": granted,
+            "hub": config.hub,
+            "config_written": written,
+            "next": (
+                "Restart your session if you have no mailbox tools yet, then call ping."
+                if written
+                else "Call ping to confirm, then update_profile to say who you are."
+            ),
+        }
+
+    return _guard(go)
 
 
 @mcp.tool()
