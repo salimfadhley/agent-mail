@@ -1,6 +1,6 @@
 # Mission brief — clear the friction backlog
 
-**Status:** planned · **Kind:** bug fixes / polish · **Origin:** field reports from
+**Status:** ✅ shipped v0.9.0 (2026-07-24) · **Kind:** bug fixes / polish · **Origin:** field reports from
 `goldberg/system`, `woking_improv_website/claude_opus`, `steele_fcpxml/claude_opus`, plus
 two found in-house
 

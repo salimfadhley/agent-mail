@@ -1,6 +1,6 @@
 # Mission brief — agent renames with forwarding, and retiring `any`
 
-**Status:** planned · **Kind:** addressing · **Depends on:** 0011 (three-part surfaces)
+**Status:** ✅ shipped v0.10.0 (2026-07-24) · **Kind:** addressing · **Depends on:** 0011 (three-part surfaces)
 
 Two changes to addressing that share one schema migration, so they ship together.
 

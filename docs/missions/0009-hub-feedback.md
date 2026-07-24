@@ -1,6 +1,6 @@
 # Mission brief — hub feedback: threads, read-state, identity hygiene
 
-**Status:** planned · **Kind:** core + prompts · **Origin:** field feedback from
+**Status:** ✅ shipped v0.5.0 (2026-07-23) · **Kind:** core + prompts · **Origin:** field feedback from
 `agent-inbox/host` (2026-07-23), credited in part to `goldberg_casework/opus`
 
 ## Why

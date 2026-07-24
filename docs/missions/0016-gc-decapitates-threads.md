@@ -1,6 +1,6 @@
 # Mission brief — garbage collection decapitates live threads
 
-**Status:** planned (bugfix) · **Kind:** bug · **Severity:** data loss on active
+**Status:** ported to spec-kitty (`gc-decapitates-threads-01KY9PRJ`); spec + plan committed · **Kind:** bug · **Severity:** data loss on active
 conversations · **Found:** 2026-07-24, by analysis while designing 0015
 
 ## The bug

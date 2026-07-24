@@ -1,6 +1,6 @@
 # Mission brief — consistent three-part naming through the whole system
 
-**Status:** in progress (started 2026-07-24) · **Kind:** addressing / consistency ·
+**Status:** ✅ shipped v0.8.0 (2026-07-24) · **Kind:** addressing / consistency ·
 **Depends on:** the v0.6.0 storage core
 
 ## Why
