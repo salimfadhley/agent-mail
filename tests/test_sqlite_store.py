@@ -15,6 +15,9 @@ import asyncio
 import json
 from pathlib import Path
 
+import pytest
+
+from agent_mailbox.exceptions import MailboxError, StoreNotOpen
 from agent_mailbox.records import ActorRecord, ObjectRecord, ReadRecord
 from agent_mailbox.sqlite_store import SCHEMA_VERSION, SqliteStore
 
@@ -53,13 +56,16 @@ class TestPersistence:
             assert await store.claim_name(ActorRecord(name="ephemeral")) is True
 
     async def test_using_it_unopened_says_so(self) -> None:
+        """A named error, not a bare RuntimeError (coding standards §2).
+
+        A caller that catches this can open the store and retry; one that catches
+        RuntimeError catches every other interpreter failure with it.
+        """
         store = SqliteStore(":memory:")
-        try:
+        with pytest.raises(StoreNotOpen, match="async with") as exc:
             await store.get_actor("anyone")
-        except RuntimeError as exc:
-            assert "context manager" in str(exc)
-        else:  # pragma: no cover
-            raise AssertionError("expected a RuntimeError")
+        assert exc.value.code == "store_not_open"
+        assert isinstance(exc.value, MailboxError)
 
 
 class TestAtomicity:

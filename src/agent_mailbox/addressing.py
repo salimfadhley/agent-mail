@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from agent_mailbox.exceptions import MailboxError
+from agent_mailbox.exceptions import MalformedAddress, RemoteMailbox
 
 #: The reserved alias for this mailbox, and the non-egress guarantee.
 LOCAL = "local"
@@ -29,10 +29,6 @@ LOCAL = "local"
 #: An address with no ``@`` part is local. Bare names are the common case, and making
 #: them mean anything else would be a trap.
 DEFAULT_HUB = LOCAL
-
-
-class AddressError(MailboxError):
-    """An address cannot be understood, or names a mailbox we cannot reach."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,15 +60,17 @@ def parse(text: str, *, default_hub: str = DEFAULT_HUB) -> Address:
     """Parse ``name@hub``, or a bare ``name`` meaning this mailbox."""
     raw = text.strip()
     if not raw:
-        raise AddressError("an address cannot be empty")
+        raise MalformedAddress("an address cannot be empty")
     if raw.count("@") > 1:
-        raise AddressError(f"{text!r} has more than one '@' — addresses are name@hub")
+        raise MalformedAddress(
+            f"{text!r} has more than one '@' — addresses are name@hub"
+        )
     name, _, hub = raw.partition("@")
     name, hub = name.strip(), hub.strip()
     if not name:
-        raise AddressError(f"{text!r} has no name before the '@'")
+        raise MalformedAddress(f"{text!r} has no name before the '@'")
     if "@" in raw and not hub:
-        raise AddressError(f"{text!r} has no hub after the '@'")
+        raise MalformedAddress(f"{text!r} has no hub after the '@'")
     return Address(name=name.lower(), hub=(hub or default_hub).lower())
 
 
@@ -85,7 +83,7 @@ def local_name(text: str, hub_name: str = LOCAL) -> str:
     """
     address = parse(text)
     if not address.is_local_to(hub_name):
-        raise AddressError(
+        raise RemoteMailbox(
             f"{address} is on another mailbox, and this one does not federate yet — "
             f"reachable addresses end in @{LOCAL} or @{hub_name}"
         )

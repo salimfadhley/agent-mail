@@ -31,6 +31,7 @@ from typing import Any, Self
 
 import aiosqlite
 
+from agent_mailbox.exceptions import StoreNotOpen
 from agent_mailbox.records import ActorRecord, ObjectRecord, ReadRecord
 from agent_mailbox.store import MessageStore
 from agent_mailbox.vocabulary import ActorType, ObjectType
@@ -161,7 +162,10 @@ class SqliteStore:
     @property
     def _db(self) -> aiosqlite.Connection:
         if self._conn is None:
-            raise RuntimeError("SqliteStore must be used as an async context manager")
+            raise StoreNotOpen(
+                "SqliteStore must be used as an async context manager: "
+                "`async with SqliteStore(path) as store:`"
+            )
         return self._conn
 
     async def schema_version(self) -> int:

@@ -19,6 +19,7 @@ import re
 import unicodedata
 from dataclasses import dataclass
 
+from agent_mailbox.exceptions import NameUnavailable
 from agent_mailbox.name_pool import FAMILY_NAMES, GIVEN_NAMES
 
 #: Reserved: addressing keywords, not names anyone may hold. ``local`` matters
@@ -27,10 +28,6 @@ from agent_mailbox.name_pool import FAMILY_NAMES, GIVEN_NAMES
 RESERVED_NAMES: frozenset[str] = frozenset({"local", "all", "any", "public", "me"})
 
 _VALID = re.compile(r"^[a-z0-9](?:[a-z0-9_]{0,62}[a-z0-9])?$")
-
-
-class NameError_(ValueError):
-    """A requested name cannot be granted. Carries why, in words an agent can act on."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,17 +72,17 @@ def validate(raw: str) -> Name:
     """
     candidate = normalize(raw)
     if not candidate:
-        raise NameError_(
+        raise NameUnavailable(
             f"{raw!r} has no usable characters — names are ASCII letters, digits and "
             "underscores, so pick a romanised form (for example 'yitzhak_levin')"
         )
     if candidate in RESERVED_NAMES:
-        raise NameError_(
+        raise NameUnavailable(
             f"{candidate!r} is reserved for addressing and cannot be a name; "
             f"reserved: {', '.join(sorted(RESERVED_NAMES))}"
         )
     if not _VALID.match(candidate):
-        raise NameError_(
+        raise NameUnavailable(
             f"{candidate!r} is not a usable name — 1 to 64 characters, starting and "
             "ending with a letter or digit"
         )

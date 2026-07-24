@@ -6,11 +6,11 @@ from collections import Counter
 
 import pytest
 
+from agent_mailbox.exceptions import NameUnavailable
 from agent_mailbox.name_pool import FAMILY_NAMES, GIVEN_NAMES, NAME_POOL
 from agent_mailbox.naming import (
     RESERVED_NAMES,
     Name,
-    NameError_,
     generate,
     normalize,
     validate,
@@ -34,7 +34,7 @@ class TestNormalize:
         machine reading of a name is often simply wrong.
         """
         for source in ("Владимир", "田中", "مُحَمَّد"):
-            with pytest.raises(NameError_, match="romanised"):
+            with pytest.raises(NameUnavailable, match="romanised"):
                 validate(source)
 
     def test_canonical_form_prevents_collisions(self) -> None:
@@ -49,20 +49,20 @@ class TestValidate:
     @pytest.mark.parametrize("reserved", sorted(RESERVED_NAMES))
     def test_refuses_reserved_words(self, reserved: str) -> None:
         """`local` in particular is an addressing guarantee, not a name."""
-        with pytest.raises(NameError_, match="reserved"):
+        with pytest.raises(NameUnavailable, match="reserved"):
             validate(reserved)
 
     def test_refuses_a_name_with_nothing_usable(self) -> None:
-        with pytest.raises(NameError_, match="no usable characters"):
+        with pytest.raises(NameUnavailable, match="no usable characters"):
             validate("!!! ???")
 
     def test_refuses_an_over_long_name(self) -> None:
-        with pytest.raises(NameError_, match="not a usable name"):
+        with pytest.raises(NameUnavailable, match="not a usable name"):
             validate("x" * 65)
 
     def test_errors_say_what_to_do(self) -> None:
         """An agent reads these, so they must be actionable, not just refusals."""
-        with pytest.raises(NameError_) as exc:
+        with pytest.raises(NameUnavailable) as exc:
             validate("local")
         assert "reserved" in str(exc.value)
 

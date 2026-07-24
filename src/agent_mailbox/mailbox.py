@@ -29,6 +29,7 @@ from agent_mailbox.exceptions import (
     NameUnavailable,
     NoSuchMessage,
     UnknownActor,
+    UnknownRecipient,
 )
 from agent_mailbox.records import ActorRecord, ObjectRecord, ReadRecord
 from agent_mailbox.store import MessageStore
@@ -102,10 +103,9 @@ class Mailbox:
         """
         now = self._now()
         if requested_name is not None:
-            try:
-                name = naming.validate(requested_name)
-            except naming.NameError_ as exc:
-                raise NameUnavailable(str(exc)) from exc
+            # naming.validate raises NameUnavailable directly — no translation layer,
+            # because a rewrap that only changes the type is a place errors get lost.
+            name = naming.validate(requested_name)
             actor = ActorRecord(
                 name=name.value,
                 actor_type=ActorType.SERVICE,
@@ -183,6 +183,7 @@ class Mailbox:
         recipients = tuple(self._local(one) for one in raw)
         copies = tuple(self._local(one) for one in cc)
         all_actors, memberships = await self._context()
+        self._reject_unknown_recipients(recipients + copies, all_actors, memberships)
 
         parent = in_reply_to
         if parent is not None:
@@ -204,6 +205,29 @@ class Mailbox:
         )
         await self._store.add_object(obj)
         return obj
+
+    @staticmethod
+    def _reject_unknown_recipients(
+        names: Sequence[str],
+        all_actors: Sequence[str],
+        memberships: dict[str, frozenset[str]],
+    ) -> None:
+        """Refuse a specific name nobody holds, before anything is stored.
+
+        A message that reports success and reaches nobody is the worst outcome for an
+        agent: it cannot notice the silence, and will wait for a reply that is never
+        coming. So a mistyped name is an error.
+
+        Groups are exempt. An empty group is legitimately empty — everyone may have
+        left, or nobody may have joined yet — and that is not the sender's mistake.
+        """
+        known = set(all_actors) | set(memberships) | {rules.EVERYONE}
+        missing = [name for name in names if name not in known]
+        if missing:
+            raise UnknownRecipient(
+                f"nobody here is called {', '.join(repr(m) for m in missing)} — "
+                "check the name, or call `directory` to see who has joined"
+            )
 
     async def reply(
         self, caller: str, object_id: str, body: str, *, subject: str | None = None

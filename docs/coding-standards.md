@@ -21,6 +21,8 @@ This document does **not** specify a Python version target — each repo declare
 
 ## 2. Exceptions
 
+> **Raise as specifically as possible; catch only as generally as you need.**
+
 ### Where they live
 
 - Each package may define its own `exceptions.py` with classes specific to that package's failures.
@@ -36,6 +38,30 @@ This document does **not** specify a Python version target — each repo declare
 - **Catch narrowly.** Catch the specific exception types you can actually recover from. Let everything else propagate.
 - `except Exception:` is **only** allowed at process boundaries — CLI `main()`, HTTP handler, message consumer — as a backstop for graceful logging. Anywhere else it is a code smell.
 - Specific catches surface bugs early. `except Exception:` swallows typos, refactor mistakes, and missing imports — you only learn about them when output is wrong.
+
+### Never catch a programming error
+
+Narrow is not sufficient — **what** you catch matters as much as how much.
+
+- `TypeError`, `AttributeError`, `NameError`, `IndexError`, and usually `KeyError` are **bugs in your code**, not conditions to recover from. Catching one converts a crash with a stack trace into wrong behaviour with no explanation, which is strictly worse.
+- If you find yourself catching `TypeError`, the fix is almost always a guard clause or a type annotation, not a handler.
+- The exceptions worth catching describe things the *world* did: a file was missing, a payload was malformed, a name was taken, a peer was unreachable.
+
+```python
+# no — hides a bug in our own code
+try:
+    recipients = message.to
+except (TypeError, AttributeError):
+    recipients = []
+
+# yes — the failure is in the input, and it is named
+if not isinstance(message.to, Sequence):
+    raise MalformedAddress(...)
+```
+
+### Give errors a machine-readable code
+
+Where an exception crosses a layer boundary — engine to API, API to client — carry a stable `code` on the exception class. Prose is for the human or agent reading it and may be reworded freely; the code is what the layer above switches on. Callers should never pattern-match on English.
 
 ### Subclassing for retry
 
