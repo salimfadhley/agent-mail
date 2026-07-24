@@ -1,6 +1,6 @@
 # Mission brief — adopt spec-kitty properly (process, panels, and cross-engine review)
 
-**Status:** planned (epic) · **Kind:** process / tooling · **Raised:** 2026-07-24
+**Status:** planned · **Kind:** process / tooling · **Raised:** 2026-07-24
 
 ## Why
 
@@ -53,15 +53,15 @@ more than one:
 | knowledge | `researcher-robbie`, `curator-carla`, `doctrine-daphne` |
 | other | `randy-reducer`, `retrospective-facilitator` |
 
-Define **when** a panel runs (an *epic*, by the standing definition: "beware, needs more
-scrutiny and planning") and **which** lenses suit which mission kind. Use
+Define **when** a panel runs — the trigger being a mission large or consequential enough
+to warrant more scrutiny than one reviewer — and **which** lenses suit which mission kind. Use
 `spec-kitty dispatch "<request>" --profile <id>` so opinions are governed and recorded,
 which the project config already requires and which has not been happening.
 
 ### 3. Cross-engine review — the outsider check
 An author reviewing their own spec defends its assumptions. **Codex** is genuinely
 independent — different training, no shared blind spots — and is authenticated on this
-host. Establish it as the standing outside opinion for epics.
+host. Establish it as the standing outside opinion for large missions.
 
 Two ways to reach it, both now available:
 
@@ -89,7 +89,7 @@ gates; reconcile the two rather than fighting them per-mission.
 
 - Every live mission exists in `kitty-specs/` with a substantive spec.
 - A written, followed rule for when a review panel runs and which lenses it uses.
-- Codex established as the outsider check for epics, reachable both ways.
+- Codex established as the outsider check for large missions, reachable both ways.
 - A documented branch/merge flow that matches how we actually release.
 - `docs/missions/` clearly marked as historical, with no ambiguity about which is canonical.
 

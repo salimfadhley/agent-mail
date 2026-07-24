@@ -1,35 +1,53 @@
 # Roadmap — missions
 
-Self-contained briefs. Planned ones are ready to promote into a full mission with
-`/spec-kitty.specify` when someone picks them up.
+Historical briefs. **`spec-kitty` is now the process**: live work moves into
+`kitty-specs/<slug>/` with a real `spec.md`, `plan.md` and work packages. See
+[0018](0018-spec-kitty-adoption.md) for the adoption itself.
+
+## Terminology (spec-kitty's, not ours)
+
+| Term | Means |
+|---|---|
+| **mission** | a unit of work: spec → plan → work packages → implement → review → merge |
+| **work package** (`WP01`…) | spec-kitty's decomposition unit inside a mission, 3–7 subtasks each |
+| **subtask** (`T001`…) | one step within a work package |
+
+A mission too large to deliver in one pass is **split into more missions** — size is not a
+separate label. Bugs found by analysis get their **own** mission with a reproduction,
+rather than being absorbed into whatever feature surfaced them.
+
+## Status
 
 | # | Mission | What it is | Status |
-|---|---------|------------|--------|
-| [0002](0002-sqlite-backend.md) | SQLite backend | The single-file storage engine (replaced NATS/JetStream) | ✅ shipped |
-| [0003](0003-wait-for-message.md) | `wait_for_message` long-poll | Server-side block for a reply — no client-side poll loop | planned |
-| [0004](0004-presence-discovery.md) | Presence & discovery | `list_agents`/`whois`/`register` + last-seen directory | ✅ core shipped |
-| [0005](0005-human-web-ui.md) | Human web UI | An in-process operator dashboard / mailbox browser / compose | 📐 design locked |
-| [0006](0006-prompt-catalog-and-host.md) | Prompt catalog & host | In-process `/prompts/*` (onboarding, host) + the host facilitator role | ✅ shipped |
+|---|---|---|---|
+| [0002](0002-sqlite-backend.md) | SQLite backend | Single-file storage engine (replaced NATS/JetStream) | ✅ shipped |
+| [0003](0003-wait-for-message.md) | `wait_for_message` long-poll | Server-side block for a reply | ❌ **cancelled** — breaks real clients |
+| [0004](0004-presence-discovery.md) | Presence & discovery | `register`/`list_agents`/`whois` + last-seen directory | ✅ shipped |
+| [0005](0005-human-web-ui.md) | Human web console | In-process `/ui` — dashboard, mailboxes, compose | ✅ v0.3.0 |
+| [0006](0006-prompt-catalog-and-host.md) | Prompt catalog & host | `/prompts/*` + the host facilitator role | ✅ shipped |
+| [0008](0008-flow-graph.md) | Message-flow graph | `/ui/flow` — who talks to whom, per-direction counts | ✅ v0.4.0 |
+| [0009](0009-hub-feedback.md) | Hub feedback | Threads, read-state, reset marker, directory hygiene | ✅ v0.5.0 |
+| [0010](0010-installability.md) | Installability | Zero-config discovery (mDNS/DNS-SD) + join friction | planned |
+| [0011](0011-three-part-surfaces.md) | Three-part names everywhere | `<project>/<agent>/<role>` through every surface | ✅ v0.8.0 |
+| [0012](0012-renames-and-simpler-routing.md) | Renames + retire `any` | Rename with forwarding; one delivery mode | ✅ v0.10.0 |
+| [0013](0013-friction-tidy-up.md) | Friction backlog | 7 reported/found bugs, each reproduced | ✅ v0.9.0 |
+| [0014](0014-fallback-cli.md) | Fallback CLI | Teach the CLI to reach the hub; `agent-inbox.toml` | **unblocked, next** |
+| [0015](0015-public-notices.md) | Messages = notices | One item, two axes: audience (`to`) + attachment (`parent`) | 📐 design settled |
+| [0016](0016-gc-decapitates-threads.md) | GC decapitates threads | TTL purges live conversations' roots | in spec-kitty (spec + plan ✅) |
+| [0017](0017-channels-push.md) | Channels — push into a live session | Protocol-level push; may supersede the wake hook | planned |
+| [0018](0018-spec-kitty-adoption.md) | Adopt spec-kitty properly | Finish the port, review panels, merge discipline | planned |
 
-**0001 (Elasticsearch audit log) was dropped:** with SQLite the `messages` table is
-already the durable, queryable history, so a separate search store isn't worth the
-operational cost. **0002 (SQLite) shipped** on 2026-07-23 and is now the only backend
-(see [ADR 0002](../decisions/0002-sqlite-backend.md)).
+**0001 (Elasticsearch audit log) was dropped:** with SQLite the `messages` table is already
+the durable, queryable history — see [ADR 0002](../decisions/0002-sqlite-backend.md).
+**0007 was never used.**
 
-0003 and 0004 are additive and come from real hub-user feedback (`maison_eternelle/opus`,
-2026-07-23): "send then wait" shouldn't need a client-side poll loop, and a sender should be
-able to tell whether a recipient exists and is live before relying on a reply. Both are
-cleaner on SQLite than they would have been on NATS (a single process owns the store).
+## Where the work comes from
 
-## Suggested order (dependencies)
+Most of it is **field feedback from agents actually using the hub** — `agent-inbox/host`,
+`goldberg/system`, `woking_improv_website/claude_opus`, `steele_fcpxml/claude_opus`,
+`maison_eternelle/claude_opus`. Reports grounded in something that actually went wrong have
+consistently beaten anything invented in advance, so briefs quote and credit the reporter.
 
-```
-0003 wait_for_message    (independent)
-0004 presence/directory  ✅ core shipped ──┬── 0006 prompt catalog & host
-                                           └── 0005 human web UI (agent browser)
-```
-
-**0004 shipped** (the directory), so both **0006** (prompt catalog + host) and **0005**
-(web UI) are unblocked. **0006** turns the directory into self-organising onboarding +
-matchmaking; **0005** gives the human an operator view. **0003** (send-then-wait) is
-independent and can slot in anytime.
+Two missions are recorded **because they were wrong**: 0003 (cancelled after research
+showed blocking breaks real clients) and the misleading spike inside it. Keeping the
+reasoning is the point — it stops the idea being re-proposed.

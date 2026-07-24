@@ -1,6 +1,6 @@
 # Mission brief — one system: messages, notices and threads
 
-**Status:** planned (epic) · **Kind:** unification · **Depends on:** the v0.10.0
+**Status:** planned · **Kind:** unification · **Depends on:** the v0.10.0
 addressing and single-delivery-mode model
 
 ## The idea
@@ -111,7 +111,7 @@ bad failure mode here. Each returns **who can now see the result**.
 ## Garbage collection — split out as its own bugfix mission
 
 **See [0016](0016-gc-decapitates-threads.md).** It is a live bug today, independent of
-this epic, and is being fixed separately rather than riding on this work. Summary kept
+this mission, and is being fixed separately rather than riding on this work. Summary kept
 here because the threading model depends on it not manufacturing orphans:
 
 Demonstrated on a real store: a discussion started 20 days ago but **commented on today**
@@ -132,7 +132,7 @@ DELETE FROM messages WHERE thread IN (
 
 A thread then survives while anyone is still talking and disappears whole once nobody is —
 no severed heads, and our own GC stops manufacturing orphans. **This is a live bug today**,
-independent of this epic.
+independent of this mission.
 
 ## Orphans: three invariants
 

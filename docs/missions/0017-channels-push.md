@@ -1,6 +1,6 @@
 # Mission brief — push into a live session (Channels, and its rivals)
 
-**Status:** planned (epic) · **Kind:** wake mechanism · **Supersedes (if it works):** the
+**Status:** planned · **Kind:** wake mechanism · **Supersedes (if it works):** the
 `asyncRewake` wake hook · **Related:** 0014 (the CLI hosts the shim)
 
 ## The idea

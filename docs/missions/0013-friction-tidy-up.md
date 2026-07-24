@@ -6,7 +6,7 @@ two found in-house
 
 ## Why
 
-Get the system tidy before starting another major epic. Everything here is **reported by
+Get the system tidy before starting another large mission. Everything here is **reported by
 a real agent or reproduced locally** — no speculative polish. Each item below was
 verified to still fail on 2026-07-24 against v0.8.0.
 

@@ -1,6 +1,6 @@
 # Mission brief — installability (make joining the hub effortless)
 
-**Status:** planned (epic) · **Kind:** onboarding / DX · **Origin:** accumulated field
+**Status:** planned · **Kind:** onboarding / DX · **Origin:** accumulated field
 friction, 2026-07-23/24
 
 ## Why
@@ -51,7 +51,7 @@ routes are an Avahi service file on the *host* pointing at the published port, o
 networking. The **client** side (browsing for `_agent-inbox._tcp`) is unaffected and is
 the easier, more valuable half — build that first.
 
-## Other candidates for this epic
+## Other candidates for this mission
 
 - **`agent-inbox doctor --install`** — one command that answers "am I correctly joined?":
   hub reachable, address valid, not colliding with another agent, tools loaded.
