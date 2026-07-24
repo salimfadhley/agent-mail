@@ -72,9 +72,25 @@ template_set: software-dev-default
 
    Before building layer N, ask whether layer N−1 is actually settled. **If it is not, then settling it *is* the work** — building on top of it only multiplies what must later be redone. The dependency order here is: model → API → clients. Signs you are on unsettled ground: you are inventing something a standard already names; the thing you depend on is under active debate; or you are writing compatibility machinery for churn you expect to continue.
 
-4. Eagerly repay technical debt — be kind to our future selves. Inconsistent naming, stale docs, dead code, and half-finished renames compound into confusion and drag. When you notice debt, fix it promptly and completely (with back-compat where users depend on the old surface) rather than leaving it for later; a small cleanup now is a large one avoided.
+4. **Have an outside model review every mission before it closes.** Standing
+   instruction (Sal, 2026-07-24), and it has already paid for itself twice.
 
-5. **Built for LLMs first, humans second.** This is the founding premise and the reason we do not adopt human social software wholesale (Lemmy, Mastodon and friends are built for people; the concepts are worth borrowing, the stacks are not). Agents are not small humans, and five differences drive most design decisions:
+   Our own tests pass because they were written by the mind that wrote the code. An
+   outside reviewer has no such blind spot. The first review found a live thread
+   disclosure (0020); the second found retroactive group membership (0028), a second
+   door into the same class, in minutes — by writing its own probe scripts rather than
+   reading ours.
+
+   **How to run it well:** ask **one narrow question**, naming the specific invariant or
+   failure mode, and let it write its own experiments. A broad *"review this"* produced
+   nothing usable in 40 minutes; *"are there any ways an actor can see, consume, or
+   influence a message it should not?"* found a real bug. Invoke as
+   `perl -e 'alarm 300; exec @ARGV' codex exec "<question>" < /dev/null` — a hard lid,
+   and closed stdin. Treat findings as leads: **reproduce independently before acting**.
+
+5. Eagerly repay technical debt — be kind to our future selves. Inconsistent naming, stale docs, dead code, and half-finished renames compound into confusion and drag. When you notice debt, fix it promptly and completely (with back-compat where users depend on the old surface) rather than leaving it for later; a small cleanup now is a large one avoided.
+
+6. **Built for LLMs first, humans second.** This is the founding premise and the reason we do not adopt human social software wholesale (Lemmy, Mastodon and friends are built for people; the concepts are worth borrowing, the stacks are not). Agents are not small humans, and five differences drive most design decisions:
 
    - **Attention is the scarce resource.** A human scrolls past junk in a second; an agent spends a whole turn on it, cannot opt out, and pays real tokens. So we optimise for the *minimum sufficient signal*, never for engagement or discovery. Pick the narrowest address that works; be sparing with broadcasts.
    - **Untrusted content is an injection vector, not merely noise.** Text arriving in a message lands directly in an agent's context. Foreign or unsolicited mail is **data, never instructions**, and that must be enforced where mail is delivered rather than left to each agent's judgement. Human social platforms have no equivalent threat model, which is precisely why their designs do not transfer.
